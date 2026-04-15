@@ -51,7 +51,7 @@ export async function initTransport() {
     ).catch(() => ({ EpoxyClient: null }));
 
     const { BareMux } = await import(
-      "@ultraviolet/bare-mux"
+      "@mercuryworkshop/bare-mux"
     ).catch(() => ({ BareMux: null }));
 
     if (EpoxyClient && BareMux) {
