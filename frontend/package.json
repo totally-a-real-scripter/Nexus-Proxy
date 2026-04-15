@@ -1,0 +1,19 @@
+{
+  "name": "nexus-proxy-frontend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev":   "vite --port 3000",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@mercuryworkshop/epoxy-transport": "^1.0.1",
+    "@mercuryworkshop/scramjet": "^0.3.4",
+    "ultraviolet": "^3.2.5"
+  },
+  "devDependencies": {
+    "vite": "^5.0.10",
+    "@ultraviolet/bare-mux": "^1.1.4"
+  }
+}

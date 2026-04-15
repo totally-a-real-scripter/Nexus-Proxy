@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Nexus — Modern Web Proxy Platform" />
+  <title>Nexus Proxy</title>
+
+  <!-- Preconnect for Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+
+  <!-- UV Service Worker scripts (must be in public scope) -->
+  <script src="/uv/uv.bundle.js" defer></script>
+  <script src="/uv/uv.config.js" defer></script>
+
+  <link rel="stylesheet" href="/src/styles/main.css" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+</head>
+<body>
+  <!-- App shell — rendered by app.js -->
+  <div id="app">
+    <!-- Loading splash -->
+    <div id="splash">
+      <div class="splash-logo">
+        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="24" cy="24" r="20" stroke="url(#g1)" stroke-width="2"/>
+          <path d="M8 24 Q24 8 40 24 Q24 40 8 24Z" fill="url(#g1)" opacity="0.3"/>
+          <circle cx="24" cy="24" r="4" fill="url(#g1)"/>
+          <defs>
+            <linearGradient id="g1" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#7c6ff7"/>
+              <stop offset="100%" stop-color="#38bdf8"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <span>NEXUS</span>
+      </div>
+      <div class="splash-spinner"></div>
+    </div>
+  </div>
+
+  <!-- Disclaimer (visible until dismissed) -->
+  <div id="disclaimer" class="disclaimer-overlay" aria-modal="true" role="dialog">
+    <div class="disclaimer-card">
+      <div class="disclaimer-icon">⚠️</div>
+      <h2>Responsible Use Policy</h2>
+      <p>
+        Nexus is a network proxy tool intended for <strong>lawful purposes only</strong> —
+        such as privacy, research, and accessing content in restricted network environments.
+      </p>
+      <ul>
+        <li>Do not use this tool to access illegal content.</li>
+        <li>Do not circumvent protections you are not authorized to bypass.</li>
+        <li>You are solely responsible for your use of this platform.</li>
+        <li>Activity may be logged for abuse prevention.</li>
+      </ul>
+      <button id="disclaimerAccept" class="btn btn-primary">
+        I Understand — Continue
+      </button>
+    </div>
+  </div>
+
+  <script type="module" src="/src/app.js"></script>
+</body>
+</html>
