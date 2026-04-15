@@ -162,9 +162,9 @@ After `npm install` in the frontend, copy the service worker bundles:
 cd frontend
 
 # Ultraviolet
-cp node_modules/ultraviolet/dist/uv.bundle.js public/uv/
-cp node_modules/ultraviolet/dist/uv.handler.js public/uv/
-cp node_modules/ultraviolet/dist/uv.sw.js       public/uv/
+cp node_modules/@titaniumnetwork-dev/ultraviolet/dist/uv.bundle.js public/uv/
+cp node_modules/@titaniumnetwork-dev/ultraviolet/dist/uv.handler.js public/uv/
+cp node_modules/@titaniumnetwork-dev/ultraviolet/dist/uv.sw.js       public/uv/
 
 # Scramjet (if using)
 cp node_modules/@mercuryworkshop/scramjet/dist/scram.sw.js public/scramjet/
@@ -172,7 +172,7 @@ cp node_modules/@mercuryworkshop/scramjet/dist/scram.sw.js public/scramjet/
 cd ..
 ```
 
-> **Note:** Exact paths may vary by package version. Check `node_modules/ultraviolet/dist/` for the correct filenames.
+> **Note:** Exact paths may vary by package version. Check `node_modules/@titaniumnetwork-dev/ultraviolet/dist/` for the correct filenames.
 
 ### 3. Configure environment
 
