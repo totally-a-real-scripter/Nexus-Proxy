@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@mercuryworkshop/epoxy-transport": "^1.0.1",
-    "@mercuryworkshop/scramjet": "^0.3.4",
+    "@mercuryworkshop/scramjet": "^1.0.2",
     "@titaniumnetwork-dev/ultraviolet": "^3.2.5"
   },
   "devDependencies": {
