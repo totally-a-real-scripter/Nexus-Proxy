@@ -7,7 +7,7 @@ WORKDIR /build/frontend
 
 # Install deps
 COPY frontend/package.json ./
-RUN npm install --prefer-offline
+RUN npm install --include=dev --prefer-offline
 
 # Copy source and build
 COPY frontend/ ./
