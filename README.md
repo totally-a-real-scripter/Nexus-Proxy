@@ -347,7 +347,7 @@ If your domain shows a plain `404 page not found`, traffic is usually not reachi
    - bundled proxy mode: `nginx`
    - direct app mode (Traefik TLS termination): `nexus`
 2. **Target port**:
-   - `nginx` should be reachable on `80` (or `443` for end-to-end TLS)
+   - `nginx` should be reachable on `8081` (or `8443` for end-to-end TLS)
    - `nexus` should be reachable on `8080`
 3. **Public Wisp URL**: set `PUBLIC_WISP_URL` to your public domain, e.g.:
    - `wss://proxy.yourdomain.com/wisp/`
@@ -355,7 +355,7 @@ If your domain shows a plain `404 page not found`, traffic is usually not reachi
 Quick checks:
 
 ```bash
-curl -I http://<service-ip>:80/health
+curl -I http://<service-ip>:8081/health
 curl -I https://proxy.yourdomain.com/health
 ```
 
