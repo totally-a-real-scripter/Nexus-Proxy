@@ -8,12 +8,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@mercuryworkshop/epoxy-transport": "^1.0.1",
+    "@mercuryworkshop/epoxy-transport": "^2.1.28",
     "@mercuryworkshop/scramjet": "^1.0.2",
     "@titaniumnetwork-dev/ultraviolet": "^3.2.5"
   },
   "devDependencies": {
     "vite": "^5.0.10",
-    "@ultraviolet/bare-mux": "^1.1.4"
+    "@mercuryworkshop/bare-mux": "^2.1.7"
   }
 }
