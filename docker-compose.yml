@@ -109,9 +109,8 @@ services:
       - "${NGINX_HTTP_PORT:-8081}:8081"
       - "${NGINX_HTTPS_PORT:-8443}:8443"
     volumes:
-      # Mount nginx config as file + directory separately to prevent
-      # /etc/nginx/nginx.conf being created as a directory on some platforms.
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # Mount only virtual host configs to avoid file-vs-directory
+      # bind issues on platforms that materialize missing paths as folders.
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       # Mount your TLS certs here, or use Coolify's automatic certs
       - ${TLS_CERT_PATH:-./nginx/certs}:/etc/nginx/certs:ro
