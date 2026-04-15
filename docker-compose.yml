@@ -4,7 +4,7 @@
 # Services:
 #   nexus     — Node.js backend + frontend (port 8080)
 #   wisp      — Python WebSocket-TCP tunnel server (internal port 7000)
-#   nginx     — Reverse proxy + TLS termination (ports 80 / 443)
+#   nginx     — Reverse proxy + TLS termination (default host ports 8080 / 443)
 #
 # Internal network:  nexus-net (bridge, no external exposure)
 # Data flow:
@@ -103,10 +103,9 @@ services:
     networks:
       - nexus-net
     ports:
-      - "${HTTP_PORT:-80}:80"
+      - "${HTTP_PORT:-8080}:80"
       - "${HTTPS_PORT:-443}:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       # Mount your TLS certs here, or use Coolify's automatic certs
       - ${TLS_CERT_PATH:-./nginx/certs}:/etc/nginx/certs:ro
