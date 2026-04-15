@@ -4,7 +4,7 @@
 # Services:
 #   nexus     — Node.js backend + frontend (port 8080)
 #   wisp      — Python WebSocket-TCP tunnel server (internal port 7000)
-#   nginx     — Reverse proxy + TLS termination (no direct host ports)
+#   nginx     — Reverse proxy + TLS termination (bound to non-80/443 host ports)
 #
 # Internal network:  nexus-net (bridge, no external exposure)
 # Data flow:
@@ -103,11 +103,11 @@ services:
     networks:
       - nexus-net
     expose:
-      - "80"
-      - "443"
+      - "8081"
+      - "8443"
     ports:
-      - "${NGINX_HTTP_PORT:-80}:80"
-      - "${NGINX_HTTPS_PORT:-443}:443"
+      - "${NGINX_HTTP_PORT:-8081}:8081"
+      - "${NGINX_HTTPS_PORT:-8443}:8443"
     volumes:
       # Mount the full nginx config directory to avoid file-vs-directory
       # bind-mount issues on some deployment platforms (e.g. Coolify).
