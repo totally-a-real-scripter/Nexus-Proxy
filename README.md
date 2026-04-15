@@ -339,6 +339,30 @@ curl https://proxy.yourdomain.com/health
 
 ---
 
+### Common 404 causes (Coolify / Traefik)
+
+If your domain shows a plain `404 page not found`, traffic is usually not reaching Nexus yet.
+
+1. **Domain target**: ensure the domain points to the correct service
+   - bundled proxy mode: `nginx`
+   - direct app mode (Traefik TLS termination): `nexus`
+2. **Target port**:
+   - `nginx` should be reachable on `80` (or `443` for end-to-end TLS)
+   - `nexus` should be reachable on `8080`
+3. **Public Wisp URL**: set `PUBLIC_WISP_URL` to your public domain, e.g.:
+   - `wss://proxy.yourdomain.com/wisp/`
+
+Quick checks:
+
+```bash
+curl -I http://<service-ip>:80/health
+curl -I https://proxy.yourdomain.com/health
+```
+
+Nexus should return `HTTP/1.1 200` for `/health`.
+
+---
+
 ## Environment Variable Reference
 
 | Variable | Default | Description |
