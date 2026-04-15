@@ -3,14 +3,14 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev":   "vite --port 3000",
+    "dev": "vite --port 3000",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
     "@mercuryworkshop/epoxy-transport": "^1.0.1",
-    "@mercuryworkshop/scramjet": "^0.3.4",
-    "ultraviolet": "^3.2.5"
+    "@mercuryworkshop/scramjet": "^1.0.2",
+    "@titaniumnetwork-dev/ultraviolet": "^3.2.5"
   },
   "devDependencies": {
     "vite": "^5.0.10",
