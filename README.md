@@ -245,6 +245,20 @@ docker compose up --build
    docker compose logs -f
    ```
 
+### Troubleshooting 504 Gateway Timeout
+
+If you see a `504 Gateway Timeout` from Nginx, verify that the custom
+`nginx/nginx.conf` is mounted in the Nginx container. This file defines the
+`$connection_upgrade` map used by `nginx/conf.d/nexus.conf` for WebSocket
+proxying (`/wisp/`) and main upstream routing. Without it, Nginx may fail to
+route upgraded connections correctly.
+
+Check active mounts/config:
+```bash
+docker compose config | sed -n '/nginx:/,/^[^ ]/p'
+docker compose logs nginx
+```
+
 ### Individual container builds
 
 ```bash
