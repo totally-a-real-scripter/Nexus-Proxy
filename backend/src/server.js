@@ -1,0 +1,258 @@
+/**
+ * Nexus Proxy — Main Server
+ * Orchestrates: Express HTTP, Bare server (UV transport), WebSocket proxy, metrics
+ *
+ * Deployment: Coolify + Cloudflare Zero Trust tunnel
+ *   - Cloudflare tunnel connects to this process on port 37291 (localhost only)
+ *   - TLS is terminated by Cloudflare — this server speaks plain HTTP internally
+ *   - /wisp/ WebSocket requests are reverse-proxied internally to wisp:37292
+ *   - express "trust proxy" is enabled so rate-limiting reads CF-Connecting-IP
+ */
+
+import "dotenv/config";
+import http from "http";
+import net from "net";
+import path from "path";
+import { fileURLToPath } from "url";
+import express from "express";
+import cors from "cors";
+import helmet from "helmet";
+import compression from "compression";
+import morgan from "morgan";
+import { createBareServer } from "@tomphttp/bare-server-node";
+import { rateLimit } from "express-rate-limit";
+
+import { metricsService } from "./services/metrics.js";
+import { requestLogger } from "./middleware/requestLogger.js";
+import { domainFilter } from "./middleware/domainFilter.js";
+import apiRouter from "./routes/api.js";
+import configRouter from "./routes/config.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// ─── Environment ──────────────────────────────────────────────────────────────
+const PORT        = parseInt(process.env.PORT || "37291", 10);
+const HOST        = process.env.HOST || "0.0.0.0";
+const BARE_PREFIX = process.env.BARE_PREFIX || "/bare/";
+const WISP_URL    = process.env.WISP_URL || "ws://wisp:37292";
+const NODE_ENV    = process.env.NODE_ENV || "production";
+
+// Parse internal wisp host/port for the WebSocket reverse-proxy
+// e.g. ws://wisp:37292 → host=wisp, port=37292
+const wispParsed = new URL(WISP_URL);
+const WISP_HOST  = wispParsed.hostname;
+const WISP_PORT  = parseInt(wispParsed.port || "37292", 10);
+
+// ─── Bare Server (Ultraviolet transport layer) ────────────────────────────────
+// The Bare server acts as the HTTP(S) relay between UV/Scramjet and the target.
+const bare = createBareServer(BARE_PREFIX, {
+  logErrors: NODE_ENV === "development",
+  database: new Map(),
+});
+
+// ─── Express App ──────────────────────────────────────────────────────────────
+const app = express();
+
+// Trust Cloudflare's proxy headers (CF-Connecting-IP, X-Forwarded-For).
+// The number "1" means trust exactly one hop — the Cloudflare edge.
+// This makes express-rate-limit use the real client IP, not the tunnel IP.
+app.set("trust proxy", parseInt(process.env.TRUST_PROXY || "1", 10));
+
+// Security headers — relaxed for proxy use
+app.use(
+  helmet({
+    contentSecurityPolicy:     false,  // Must be off; proxied pages set their own
+    crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy:   false,
+    crossOriginResourcePolicy: false,
+  })
+);
+
+app.use(cors({
+  origin:         process.env.CORS_ORIGIN || "*",
+  methods:        ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
+  allowedHeaders: ["*"],
+}));
+
+app.use(compression());
+app.use(morgan(NODE_ENV === "development" ? "dev" : "combined"));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true }));
+
+// ─── Rate Limiting ────────────────────────────────────────────────────────────
+// Uses the real client IP from CF-Connecting-IP (trust proxy enabled above).
+const limiter = rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "60000", 10),
+  max:      parseInt(process.env.RATE_LIMIT_MAX        || "200",   10),
+  standardHeaders: true,
+  legacyHeaders:   false,
+  message: { error: "Too many requests. Please slow down." },
+  // Don't rate-limit the bare relay — it has its own request cadence
+  skip: (req) => req.path.startsWith(BARE_PREFIX),
+});
+app.use(limiter);
+
+// ─── Middleware ───────────────────────────────────────────────────────────────
+app.use(requestLogger(metricsService));
+app.use(domainFilter);
+
+// ─── Static Frontend ─────────────────────────────────────────────────────────
+const frontendPath = process.env.FRONTEND_PATH ||
+  path.resolve(__dirname, "../../frontend/dist");
+app.use(express.static(frontendPath, {
+  maxAge: NODE_ENV === "production" ? "1d" : 0,
+  etag: true,
+}));
+
+// ─── API Routes ───────────────────────────────────────────────────────────────
+app.use("/api", apiRouter(metricsService));
+app.use("/api/config", configRouter);
+
+// ─── Health Check ─────────────────────────────────────────────────────────────
+app.get("/health", (_req, res) => {
+  res.json({
+    status:  "ok",
+    version: "1.0.0",
+    port:    PORT,
+    wisp:    WISP_URL,
+    uptime:  process.uptime(),
+  });
+});
+
+// ─── Transport config (sent to browser on startup) ────────────────────────────
+// The browser uses PUBLIC_WISP_URL to connect its Epoxy WebSocket transport.
+// For Cloudflare ZT: this will be wss://proxy.yourdomain.com/wisp/
+app.get("/api/transport-config", (_req, res) => {
+  res.json({
+    wispUrl:        process.env.PUBLIC_WISP_URL || WISP_URL,
+    barePrefix:     BARE_PREFIX,
+    scramjetPrefix: process.env.SCRAMJET_PREFIX || "/scram/",
+    uvPrefix:       process.env.UV_PREFIX || "/service/",
+  });
+});
+
+// ─── SPA Fallback ─────────────────────────────────────────────────────────────
+app.get("*", (req, res, next) => {
+  if (req.path.startsWith(BARE_PREFIX) || req.path.startsWith("/api")) {
+    return next();
+  }
+  res.sendFile(path.join(frontendPath, "index.html"), (err) => {
+    if (err) res.status(404).send("Not found");
+  });
+});
+
+// ─── HTTP Server ─────────────────────────────────────────────────────────────
+const server = http.createServer();
+
+server.on("request", (req, res) => {
+  if (bare.shouldRoute(req)) {
+    bare.routeRequest(req, res);
+  } else {
+    app(req, res);
+  }
+});
+
+// ─── WebSocket upgrade handler ─────────────────────────────────────────────────
+// Two kinds of WS upgrades arrive here:
+//   1. /wisp/*  — browser's Epoxy transport connecting to the Wisp server
+//                 → pipe the raw TCP connection to wisp:37292
+//   2. /bare/*  — UV/Scramjet bare-server WebSocket relay
+//                 → hand off to the Bare server
+server.on("upgrade", (req, socket, head) => {
+  socket.on("error", (err) => {
+    console.error("[WS upgrade] Socket error:", err.message);
+    socket.destroy();
+  });
+
+  // ── Route /wisp/ to the internal Wisp container ──────────────────────────
+  if (req.url.startsWith("/wisp/")) {
+    // Strip /wisp/ prefix so the Wisp server sees a plain WebSocket path
+    const wispPath = req.url.slice("/wisp".length) || "/";
+
+    // Open a raw TCP connection to the wisp container and pipe it through.
+    // We reconstruct the HTTP upgrade handshake manually so the wisp server
+    // sees a proper WebSocket upgrade request.
+    const upstream = net.connect(WISP_PORT, WISP_HOST, () => {
+      // Rebuild the HTTP/1.1 upgrade request headers
+      const headers = [
+        `GET ${wispPath} HTTP/1.1`,
+        `Host: ${WISP_HOST}:${WISP_PORT}`,
+        `Upgrade: websocket`,
+        `Connection: Upgrade`,
+        `Sec-WebSocket-Version: 13`,
+      ];
+
+      // Forward relevant headers from the original request
+      const forward = [
+        "sec-websocket-key",
+        "sec-websocket-protocol",
+        "sec-websocket-extensions",
+        "origin",
+        "user-agent",
+      ];
+      for (const h of forward) {
+        if (req.headers[h]) headers.push(`${h}: ${req.headers[h]}`);
+      }
+      headers.push("", "");  // blank line = end of headers
+
+      upstream.write(headers.join("\r\n"));
+      if (head && head.length) upstream.write(head);
+
+      // Bidirectional pipe
+      upstream.pipe(socket);
+      socket.pipe(upstream);
+    });
+
+    upstream.on("error", (err) => {
+      console.error("[Wisp proxy] Upstream error:", err.message);
+      socket.destroy();
+    });
+
+    socket.on("close", () => upstream.destroy());
+    upstream.on("close", () => socket.destroy());
+    return;
+  }
+
+  // ── Route /bare/* to the Bare server ─────────────────────────────────────
+  if (bare.shouldRoute(req)) {
+    bare.routeUpgrade(req, socket, head);
+    return;
+  }
+
+  // Unknown upgrade path — close the socket
+  socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
+});
+
+server.on("error", (err) => {
+  console.error("[Server] Fatal error:", err);
+  process.exit(1);
+});
+
+server.listen(PORT, HOST, () => {
+  console.log(`
+  ███╗   ██╗███████╗██╗  ██╗██╗   ██╗███████╗
+  ████╗  ██║██╔════╝╚██╗██╔╝██║   ██║██╔════╝
+  ██╔██╗ ██║█████╗   ╚███╔╝ ██║   ██║███████╗
+  ██║╚██╗██║██╔══╝   ██╔██╗ ██║   ██║╚════██║
+  ██║ ╚████║███████╗██╔╝ ██╗╚██████╔╝███████║
+  ╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝  v1.0
+
+  🌐 Listening on http://${HOST}:${PORT}
+  📡 Bare relay at ${BARE_PREFIX}
+  🔌 Wisp internal target: ${WISP_HOST}:${WISP_PORT}
+  ☁️  Cloudflare ZT mode — trust proxy: ${app.get("trust proxy")}
+  🌍 Environment: ${NODE_ENV}
+  `);
+});
+
+// ─── Graceful shutdown ────────────────────────────────────────────────────────
+const shutdown = () => {
+  console.log("\n[Server] Shutting down gracefully...");
+  server.close(() => {
+    bare.close();
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(1), 5000);
+};
+process.on("SIGTERM", shutdown);
+process.on("SIGINT",  shutdown);

@@ -1,0 +1,140 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Nexus Proxy — Docker Compose
+# Deployment target: Coolify + Cloudflare Zero Trust tunnel
+#
+# WHY NO NGINX:
+#   Cloudflare ZT tunnel handles TLS termination and acts as the public
+#   ingress. The tunnel connects directly to the nexus container on the
+#   host. No nginx, no cert management, no ports 80/443 needed.
+#
+# PORT ASSIGNMENTS (uncommon, avoids collisions with 80/443/3000/8080):
+#   37291  — nexus  (Node.js backend + frontend)  ← Cloudflare tunnel points here
+#   37292  — wisp   (Python WebSocket/TCP tunnel)  ← internal only, NOT exposed
+#
+# Data flow:
+#   Browser → Cloudflare ZT tunnel
+#     → nexus:37291  (HTTP requests, bare-server relay, SSE, static files)
+#     → nexus:37291/wisp/  (WebSocket, proxied internally to wisp:37292)
+#     → wisp:37292   (Wisp protocol → raw TCP to target host)
+#
+# Cloudflare tunnel config (cloudflared):
+#   - Public hostname: proxy.yourdomain.com
+#     Service: http://localhost:37291
+#   The tunnel forwards both HTTP and WebSocket — cloudflared handles upgrades.
+#
+# HOW TO SET PUBLIC_WISP_URL:
+#   The browser connects to wss://proxy.yourdomain.com/wisp/
+#   Nexus receives it on /wisp/ and reverse-proxies it to wisp:37292 internally.
+#   Set PUBLIC_WISP_URL=wss://proxy.yourdomain.com/wisp/
+# ═══════════════════════════════════════════════════════════════════════════
+
+version: "3.9"
+
+services:
+
+  # ── Nexus backend + frontend ───────────────────────────────────────────────
+  nexus:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nexus-backend
+    restart: unless-stopped
+    networks:
+      - nexus-net
+    ports:
+      # Exposed to host so cloudflared tunnel can reach it.
+      # Bind to 127.0.0.1 — only the tunnel (running on the same host) needs it.
+      # This means the port is NOT reachable from the public internet directly.
+      - "127.0.0.1:${NEXUS_PORT:-37291}:37291"
+    environment:
+      NODE_ENV:             ${NODE_ENV:-production}
+      PORT:                 37291
+      HOST:                 0.0.0.0
+
+      BARE_PREFIX:          /bare/
+      UV_PREFIX:            /service/
+      SCRAMJET_PREFIX:      /scram/
+
+      # Internal Docker DNS — nexus talks to wisp over the bridge network
+      WISP_URL:             ws://wisp:37292
+
+      # PUBLIC URL: what the browser's Epoxy client connects to via WebSocket.
+      # Cloudflare tunnel exposes this. Must use wss://.
+      # Set this to:  wss://proxy.yourdomain.com/wisp/
+      PUBLIC_WISP_URL:      ${PUBLIC_WISP_URL:?PUBLIC_WISP_URL must be set, e.g. wss://proxy.yourdomain.com/wisp/}
+
+      FRONTEND_PATH:        /app/frontend/dist
+
+      # Cloudflare sets CF-Connecting-IP — trust it for rate limiting.
+      # Also set trust proxy so express-rate-limit reads the right IP.
+      TRUST_PROXY:          ${TRUST_PROXY:-1}
+
+      CORS_ORIGIN:          ${CORS_ORIGIN:-*}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-60000}
+      RATE_LIMIT_MAX:       ${RATE_LIMIT_MAX:-200}
+      CACHE_ENABLED:        ${CACHE_ENABLED:-true}
+      CACHE_MAX_AGE_MS:     ${CACHE_MAX_AGE_MS:-300000}
+      PROXY_TIMEOUT_MS:     ${PROXY_TIMEOUT_MS:-30000}
+      DOMAIN_BLOCKLIST:     ${DOMAIN_BLOCKLIST:-}
+      DOMAIN_ALLOWLIST:     ${DOMAIN_ALLOWLIST:-}
+      SEARCH_ENGINE:        ${SEARCH_ENGINE:-https://www.google.com/search?q=}
+    depends_on:
+      wisp:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus:   "1.0"
+
+  # ── Wisp server (Python WebSocket → TCP tunnel) ────────────────────────────
+  # NOT exposed to the host. Only nexus can reach it via the internal network.
+  # nexus reverse-proxies /wisp/ WebSocket connections to this container.
+  wisp:
+    build:
+      context: ./wisp-server
+      dockerfile: Dockerfile
+    container_name: nexus-wisp
+    restart: unless-stopped
+    networks:
+      - nexus-net
+    # No `ports:` block — wisp is internal only. Cloudflare never touches it
+    # directly. The browser's wss://proxy.yourdomain.com/wisp/ request reaches
+    # nexus, which pipes the WebSocket upgrade to wisp:37292 over the Docker
+    # bridge network.
+    expose:
+      - "37292"
+    environment:
+      WISP_HOST:        0.0.0.0
+      WISP_PORT:        37292
+      LOG_LEVEL:        ${WISP_LOG_LEVEL:-INFO}
+      WISP_MAX_PAYLOAD: ${WISP_MAX_PAYLOAD:-10485760}
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import socket; s=socket.create_connection(('localhost',37292),2); s.close()"]
+      interval: 15s
+      timeout:  5s
+      retries:  3
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus:   "0.5"
+
+# ── Networks ──────────────────────────────────────────────────────────────────
+networks:
+  nexus-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.31.47.0/24
