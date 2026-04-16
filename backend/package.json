@@ -12,16 +12,11 @@
     "@tomphttp/bare-server-node": "^2.0.3",
     "express": "^4.18.2",
     "express-rate-limit": "^7.1.5",
-    "http-proxy-middleware": "^3.0.0",
-    "node-cache": "^5.1.2",
-    "uuid": "^9.0.0",
-    "ws": "^8.16.0",
     "compression": "^1.7.4",
     "cors": "^2.8.5",
     "helmet": "^7.1.0",
     "morgan": "^1.10.0",
-    "dotenv": "^16.3.1",
-    "ultraviolet": "^3.2.5"
+    "dotenv": "^16.3.1"
   },
   "engines": {
     "node": ">=18.0.0"

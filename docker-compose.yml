@@ -113,7 +113,6 @@ services:
       WISP_HOST:        0.0.0.0
       WISP_PORT:        37292
       LOG_LEVEL:        ${WISP_LOG_LEVEL:-INFO}
-      WISP_MAX_PAYLOAD: ${WISP_MAX_PAYLOAD:-10485760}
     healthcheck:
       test: ["CMD", "python", "-c",
              "import socket; s=socket.create_connection(('localhost',37292),2); s.close()"]
