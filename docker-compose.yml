@@ -37,15 +37,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: nexus-backend
     restart: unless-stopped
     networks:
       - nexus-net
     ports:
-      # Exposed to host so cloudflared tunnel can reach it.
-      # Bind to 127.0.0.1 — only the tunnel (running on the same host) needs it.
-      # This means the port is NOT reachable from the public internet directly.
-      - "127.0.0.1:${NEXUS_PORT:-37291}:37291"
+      # Exposed to host so reverse proxies (e.g., Coolify) can reach it.
+      - "${NEXUS_PORT:-37291}:37291"
     environment:
       NODE_ENV:             ${NODE_ENV:-production}
       PORT:                 37291
@@ -99,7 +96,6 @@ services:
     build:
       context: ./wisp-server
       dockerfile: Dockerfile
-    container_name: nexus-wisp
     restart: unless-stopped
     networks:
       - nexus-net
