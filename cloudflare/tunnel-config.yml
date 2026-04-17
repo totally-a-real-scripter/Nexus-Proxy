@@ -20,13 +20,13 @@
 #     (Cloudflare handles HTTPS — no need to configure TLS here)
 # ─────────────────────────────────────────────────────────────────────────────
 
-tunnel: <TUNNEL_UUID>
-credentials-file: /root/.cloudflared/<TUNNEL_UUID>.json
+tunnel: d156ab3b-92d6-4a4c-bd3c-eb799c41e9e6
+credentials-file: /root/.cloudflared/d156ab3b-92d6-4a4c-bd3c-eb799c41e9e6.json
 
 # Route all traffic on proxy.yourdomain.com → nexus on localhost:37291
 # Cloudflare terminates TLS; cloudflared → nexus is plain HTTP.
 ingress:
-  - hostname: proxy.yourdomain.com
+  - hostname: nexus.garfield-math.xyz
     service: http://localhost:37291
     originRequest:
       # Cloudflare sends WebSocket upgrade headers — tell cloudflared to pass them
