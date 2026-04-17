@@ -38,8 +38,6 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
-    networks:
-      - nexus-net
     ports:
       # Exposed to host so reverse proxies (e.g., Coolify) can reach it.
       - "${NEXUS_PORT:-37291}:37291"
@@ -97,8 +95,6 @@ services:
       context: ./wisp-server
       dockerfile: Dockerfile
     restart: unless-stopped
-    networks:
-      - nexus-net
     # No `ports:` block — wisp is internal only. Cloudflare never touches it
     # directly. The browser's wss://proxy.yourdomain.com/wisp/ request reaches
     # nexus, which pipes the WebSocket upgrade to wisp:37292 over the Docker
@@ -126,10 +122,3 @@ services:
           memory: 256m
           cpus:   "0.5"
 
-# ── Networks ──────────────────────────────────────────────────────────────────
-networks:
-  nexus-net:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.31.47.0/24
