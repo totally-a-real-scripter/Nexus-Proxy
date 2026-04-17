@@ -28,7 +28,7 @@ A production-ready web proxy platform built with Ultraviolet, Scramjet, Epoxy Tr
 └─────────────────────────────────────────────────────────┼───────┼───┘
                                                           │       │
                               ┌───────────────────────────▼──┐    │
-                              │  Node.js Backend (port 8080) │    │
+                              │  Node.js Backend (port 37291) │    │
                               │                              │    │
                               │  • Express HTTP server       │    │
                               │  • @tomphttp/bare-server     │    │
@@ -40,7 +40,7 @@ A production-ready web proxy platform built with Ultraviolet, Scramjet, Epoxy Tr
                               └──────────────────────────────┘    │
                                                                    │
                               ┌────────────────────────────────────▼──┐
-                              │  Python Wisp Server (port 7000)       │
+                              │  Python Wisp Server (port 37292)       │
                               │                                        │
                               │  • WebSocket listener                  │
                               │  • Wisp protocol (CONNECT/DATA/CLOSE) │
@@ -184,7 +184,7 @@ cp frontend/.env.example frontend/.env     # Frontend Vite env
 
 Edit `backend/.env`:
 ```env
-WISP_URL=ws://localhost:7000
+WISP_URL=ws://localhost:37292
 PUBLIC_WISP_URL=ws://localhost/wisp/
 NODE_ENV=development
 ```
@@ -195,14 +195,14 @@ NODE_ENV=development
 ```bash
 cd wisp-server
 python server.py
-# Listening on ws://0.0.0.0:7000
+# Listening on ws://0.0.0.0:37292
 ```
 
 **Terminal 2 — Backend:**
 ```bash
 cd backend
 npm run dev
-# Listening on http://0.0.0.0:8080
+# Listening on http://0.0.0.0:37291
 ```
 
 **Terminal 3 — Frontend (Vite dev server):**
@@ -218,124 +218,73 @@ Open **http://localhost:3000** in your browser.
 
 ## Docker Deployment
 
-### Quick start (HTTP only)
+`docker-compose.yml` is **optional and local-dev-only** in this repository.
+
+Use it only when you want to run `nexus` + `wisp` together on your own machine:
 
 ```bash
-cp .env.example .env
-# Edit PUBLIC_WISP_URL to ws://your-ip/wisp/
-
 docker compose up --build
 ```
 
-### Production (with TLS)
-
-1. Put your certificates in `nginx/certs/`:
-   - `nginx/certs/fullchain.pem`
-   - `nginx/certs/privkey.pem`
-
-2. Edit `.env`:
-   ```env
-   PUBLIC_WISP_URL=wss://proxy.yourdomain.com/wisp/
-   CORS_ORIGIN=https://proxy.yourdomain.com
-   ```
-
-3. Start:
-   ```bash
-   docker compose up -d --build
-   docker compose logs -f
-   ```
-
-### Individual container builds
-
-```bash
-# Backend (includes frontend build)
-docker build -t nexus-backend .
-
-# Wisp server
-docker build -t nexus-wisp ./wisp-server
-```
+For production on Coolify, do **not** deploy this repo as one Docker Compose app.
+Deploy two independent Dockerfile resources instead (documented below).
 
 ---
 
 ## Coolify Deployment
 
-Coolify is a self-hosted Heroku/Vercel alternative that makes Docker deployment straightforward.
+Deploy this project in Coolify as **two separate resources**.
 
-### Step-by-step
+### Resource 1: `nexus` (public)
 
-#### 1. Add your repository
+- **Type:** Dockerfile-based application
+- **Build context:** repo root
+- **Dockerfile:** `./Dockerfile`
+- **Port:** `37291`
+- **Public domain:** yes (for example `nexus.garfield-math.xyz`)
 
-- Open Coolify → **Projects** → **New Project**
-- Connect your Git repository (GitHub/GitLab/Gitea)
-
-#### 2. Create a Docker Compose service
-
-- Click **New Service** → **Docker Compose**
-- Point to the `docker-compose.yml` in the repo root
-- Coolify will parse all services automatically
-
-#### 3. Configure environment variables
-
-In Coolify's UI, go to **Environment Variables** and add:
+Set these production environment variables on the `nexus` resource:
 
 | Variable | Value |
 |---|---|
 | `NODE_ENV` | `production` |
-| `PUBLIC_WISP_URL` | `wss://proxy.yourdomain.com/wisp/` |
-| `CORS_ORIGIN` | `https://proxy.yourdomain.com` |
+| `PORT` | `37291` |
+| `HOST` | `0.0.0.0` |
+| `WISP_URL` | `ws://<internal-wisp-service-name>:37292` |
+| `PUBLIC_WISP_URL` | `wss://nexus.garfield-math.xyz/wisp/` |
+| `TRUST_PROXY` | `1` |
+| `CORS_ORIGIN` | `https://nexus.garfield-math.xyz` |
 | `RATE_LIMIT_MAX` | `200` |
-| `DOMAIN_BLOCKLIST` | *(optional, comma-separated)* |
-| `WISP_LOG_LEVEL` | `INFO` |
+| `RATE_LIMIT_WINDOW_MS` | `60000` |
+| `CACHE_ENABLED` | `true` |
+| `CACHE_MAX_AGE_MS` | `300000` |
+| `PROXY_TIMEOUT_MS` | `30000` |
+| `WISP_LOG_LEVEL` | `info` |
+| `DOMAIN_BLOCKLIST` | *(optional)* |
+| `DOMAIN_ALLOWLIST` | *(optional)* |
+| `SEARCH_ENGINE` | `https://www.google.com/search?q=` |
 
-#### 4. Configure TLS
+### Resource 2: `wisp` (internal-only)
 
-- In Coolify → **Service** → **Domains**, add your domain
-- Enable **Let's Encrypt** — Coolify handles cert issuance and renewal automatically
-- The nginx service in docker-compose handles TLS; if Coolify fronts with its own Traefik proxy, you can remove the nginx service and expose port 8080 directly — Coolify's Traefik will handle TLS
+- **Type:** Dockerfile-based application
+- **Build context:** `wisp-server/`
+- **Dockerfile:** `wisp-server/Dockerfile`
+- **Port:** `37292`
+- **Public domain:** **no**
 
-#### 5. Wisp WebSocket path
+Set these environment variables on the `wisp` resource:
 
-If Coolify's Traefik is in front (recommended), you need a path-based routing rule for `/wisp/`:
+| Variable | Value |
+|---|---|
+| `WISP_HOST` | `0.0.0.0` |
+| `WISP_PORT` | `37292` |
+| `LOG_LEVEL` | `INFO` |
 
-Add a label to the `wisp` service in `docker-compose.yml`:
-```yaml
-wisp:
-  labels:
-    - "traefik.enable=true"
-    - "traefik.http.routers.wisp.rule=Host(`proxy.yourdomain.com`) && PathPrefix(`/wisp/`)"
-    - "traefik.http.routers.wisp.entrypoints=websecure"
-    - "traefik.http.services.wisp.loadbalancer.server.port=7000"
-    - "traefik.http.middlewares.wisp-strip.stripprefix.prefixes=/wisp"
-    - "traefik.http.routers.wisp.middlewares=wisp-strip"
-```
+### Connectivity notes
 
-And for the nexus backend:
-```yaml
-nexus:
-  labels:
-    - "traefik.enable=true"
-    - "traefik.http.routers.nexus.rule=Host(`proxy.yourdomain.com`)"
-    - "traefik.http.routers.nexus.entrypoints=websecure"
-    - "traefik.http.services.nexus.loadbalancer.server.port=8080"
-```
-
-#### 6. Deploy
-
-Click **Deploy** — Coolify will:
-1. Build both Docker images
-2. Start all three services on the internal network
-3. Issue and configure TLS certificates
-4. Begin routing traffic
-
-#### 7. Verify
-
-```bash
-# Health check
-curl https://proxy.yourdomain.com/health
-
-# Expected:
-# {"status":"ok","version":"1.0.0","wisp":"ws://wisp:7000","uptime":42}
-```
+- Configure `nexus` `WISP_URL` to the **internal Coolify hostname** of your `wisp` resource.
+- Keep `PUBLIC_WISP_URL` on `nexus` set to `wss://nexus.garfield-math.xyz/wisp/` so browser clients connect through the public `nexus` domain.
+- Do not assign a public domain to `wisp`.
 
 ---
 
@@ -343,13 +292,15 @@ curl https://proxy.yourdomain.com/health
 
 | Variable | Default | Description |
 |---|---|---|
-| `PORT` | `8080` | Backend HTTP port |
+| `PORT` | `37291` | Nexus HTTP port |
+| `HOST` | `0.0.0.0` | Nexus bind host |
 | `NODE_ENV` | `production` | `development` or `production` |
 | `BARE_PREFIX` | `/bare/` | Bare server relay prefix |
 | `UV_PREFIX` | `/service/` | Ultraviolet proxy prefix |
 | `SCRAMJET_PREFIX` | `/scram/` | Scramjet proxy prefix |
-| `WISP_URL` | `ws://wisp:7000` | Internal Wisp WebSocket URL |
-| `PUBLIC_WISP_URL` | — | Browser-facing Wisp URL (must be public) |
+| `WISP_URL` | `ws://127.0.0.1:37292` | Internal Wisp WebSocket URL used by Nexus backend |
+| `PUBLIC_WISP_URL` | falls back to `WISP_URL` | Browser-facing Wisp URL |
+| `TRUST_PROXY` | `1` | Express trust proxy hop count |
 | `RATE_LIMIT_WINDOW_MS` | `60000` | Rate limit window in ms |
 | `RATE_LIMIT_MAX` | `200` | Max requests per window |
 | `CACHE_ENABLED` | `true` | Enable response caching |
@@ -357,11 +308,12 @@ curl https://proxy.yourdomain.com/health
 | `PROXY_TIMEOUT_MS` | `30000` | Proxy request timeout |
 | `DOMAIN_BLOCKLIST` | — | Comma-separated blocked domains |
 | `DOMAIN_ALLOWLIST` | — | Comma-separated allowed domains (empty = all) |
-| `SEARCH_ENGINE` | Google | Search query prefix URL |
+| `SEARCH_ENGINE` | `https://www.google.com/search?q=` | Search query prefix URL |
 | `CORS_ORIGIN` | `*` | CORS allowed origin |
 | `WISP_HOST` | `0.0.0.0` | Wisp server bind host |
-| `WISP_PORT` | `7000` | Wisp server port |
-| `WISP_LOG_LEVEL` | `INFO` | Python logging level |
+| `WISP_PORT` | `37292` | Wisp server port |
+| `LOG_LEVEL` | `INFO` | Wisp Python logging level |
+| `WISP_LOG_LEVEL` | `info` | Optional deployment-level value often mirrored into Wisp `LOG_LEVEL` |
 
 ---
 

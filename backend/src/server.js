@@ -34,11 +34,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT        = parseInt(process.env.PORT || "37291", 10);
 const HOST        = process.env.HOST || "0.0.0.0";
 const BARE_PREFIX = process.env.BARE_PREFIX || "/bare/";
-const WISP_URL    = process.env.WISP_URL || "ws://wisp:37292";
+const WISP_URL    = process.env.WISP_URL || "ws://127.0.0.1:37292";
 const NODE_ENV    = process.env.NODE_ENV || "production";
 
 // Parse internal wisp host/port for the WebSocket reverse-proxy
-// e.g. ws://wisp:37292 → host=wisp, port=37292
+// e.g. ws://wisp-internal:37292 → host=wisp-internal, port=37292
 const wispParsed = new URL(WISP_URL);
 const WISP_HOST  = wispParsed.hostname;
 const WISP_PORT  = parseInt(wispParsed.port || "37292", 10);
