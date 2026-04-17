@@ -1,8 +1,12 @@
 FROM node:20-alpine AS frontend-builder
 WORKDIR /build/frontend
 
+# Ensure frontend build tools in devDependencies (e.g. vite) are installed
+# even when NODE_ENV=production is provided by the build environment.
+ENV NODE_ENV=development
+
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+RUN npm ci --include=dev
 
 COPY frontend/ ./
 RUN npm run build
