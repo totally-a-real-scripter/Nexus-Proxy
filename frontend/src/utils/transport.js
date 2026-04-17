@@ -47,7 +47,7 @@ export async function initTransport() {
   try {
     // Dynamic import so the SW registration completes first
     const { EpoxyClient } = await import(
-      "@mercuryworkshop/epoxy-transport"
+      /* @vite-ignore */ "@mercuryworkshop/epoxy-transport"
     ).catch(() => ({ EpoxyClient: null }));
 
     const { BareMux } = await import(

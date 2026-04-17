@@ -6,6 +6,9 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
+    rollupOptions: {
+      external: ["@mercuryworkshop/epoxy-transport"],
+    },
   },
   server: {
     port: 5173,
