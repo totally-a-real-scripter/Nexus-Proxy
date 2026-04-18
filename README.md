@@ -233,9 +233,9 @@ Deploy two independent Dockerfile resources instead (documented below).
 
 ---
 
-## Deployment Options (Cloudflare optional)
+## Deployment Options
 
-Nexus Proxy does **not** require Cloudflare to run. The required architecture is:
+Nexus Proxy does **not** require any specific edge provider. The required architecture is:
 
 - **Only Nexus is public**
 - **Wisp stays internal-only**
@@ -245,9 +245,8 @@ Nexus Proxy does **not** require Cloudflare to run. The required architecture is
 You can satisfy this architecture with:
 
 - A standard reverse proxy/load balancer (Nginx, Caddy, Traefik, HAProxy, etc.), or
-- Cloudflare Tunnel / Zero Trust (optional, see `cloudflare/` folder).
+- Any secure inbound tunnel solution (optional).
 
-The `cloudflare/` folder is kept for an optional Cloudflare deployment path; it is not required app logic.
 
 ---
 
@@ -264,7 +263,7 @@ Deploy this project in Coolify as **two separate resources**.
 - **Browser WebSocket URL:** `wss://nexus.garfield-math.xyz/wisp/`
 - **Internal Wisp upstream from Nexus:** `ws://<internal-host>:37292`
 
-This routing model is the same whether you publish Nexus through a normal reverse proxy or via Cloudflare Tunnel.
+This routing model is the same whether you publish Nexus through a standard reverse proxy or an inbound tunnel.
 
 ### Resource 1: `nexus` (public)
 
@@ -317,7 +316,6 @@ Set these environment variables on the `wisp` resource:
 - Keep `PUBLIC_WISP_URL` on `nexus` set to `wss://nexus.garfield-math.xyz/wisp/` so browser clients connect through the public `nexus` domain.
 - Do not assign a public domain to `wisp`.
 - Do not configure external HTTP/uptime checks against `wisp:37292` (it is WebSocket-only and internal-only).
-- If you use Cloudflare Tunnel, follow the optional guide in `cloudflare/CLOUDFLARE_SETUP.md`.
 
 ---
 
@@ -366,7 +364,7 @@ This platform is provided for **lawful purposes only**:
 - **Rate limiting** is enabled by default (200 req/min per IP). Adjust `RATE_LIMIT_MAX`.
 - **Domain filtering**: Use `DOMAIN_BLOCKLIST` to block known malicious domains, or `DOMAIN_ALLOWLIST` for strict access control.
 - **Service isolation**: The wisp server and backend run as non-root users in separate containers on an internal Docker network.
-- **No public Wisp exposure**: keep Wisp internal-only — no public domain, no Cloudflare hostname, and no external HTTP health check on port `37292`.
+- **No public Wisp exposure**: keep Wisp internal-only — no public domain and no external HTTP health check on port `37292`.
 - **Wisp handshake errors usually indicate misrouting**: repeated `opening handshake failed` / `did not receive a valid HTTP request` logs usually mean a public HTTP probe or misconfigured public hostname is targeting Wisp directly instead of going through Nexus `/wisp/`.
 - **No auth by default**: Add authentication (e.g., HTTP Basic Auth in nginx, or a JWT middleware in Express) before exposing this publicly.
 - **Logging**: Request logs are in-memory only and reset on restart. For persistent audit logs, pipe Docker logs to a log aggregator (Loki, Datadog, etc.).
