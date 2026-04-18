@@ -2,11 +2,11 @@
  * Nexus Proxy — Main Server
  * Orchestrates: Express HTTP, Bare server (UV transport), WebSocket proxy, metrics
  *
- * Deployment: Coolify + Cloudflare Zero Trust tunnel
- *   - Cloudflare tunnel connects to this process on port 37291 (localhost only)
- *   - TLS is terminated by Cloudflare — this server speaks plain HTTP internally
+ * Deployment: any reverse-proxy/tunnel in front of Nexus (Cloudflare optional)
+ *   - Public traffic reaches this process on port 37291
+ *   - TLS may be terminated by your edge proxy/tunnel
  *   - /wisp/ WebSocket requests are reverse-proxied internally to wisp:37292
- *   - express "trust proxy" is enabled so rate-limiting reads CF-Connecting-IP
+ *   - express "trust proxy" is enabled so rate-limiting reads forwarded client IP
  */
 
 import "dotenv/config";
@@ -122,9 +122,9 @@ const bare = createBareServer(BARE_PREFIX, {
 // ─── Express App ──────────────────────────────────────────────────────────────
 const app = express();
 
-// Trust Cloudflare's proxy headers (CF-Connecting-IP, X-Forwarded-For).
-// The number "1" means trust exactly one hop — the Cloudflare edge.
-// This makes express-rate-limit use the real client IP, not the tunnel IP.
+// Trust upstream proxy headers (for example X-Forwarded-For / X-Forwarded-Proto).
+// "1" means trust exactly one hop in front of Nexus.
+// This makes express-rate-limit use the real client IP when behind a proxy.
 app.set("trust proxy", parseInt(process.env.TRUST_PROXY || "1", 10));
 
 // Security headers — relaxed for proxy use
@@ -190,7 +190,7 @@ app.get("/health", (_req, res) => {
 
 // ─── Transport config (sent to browser on startup) ────────────────────────────
 // The browser uses PUBLIC_WISP_URL to connect its Epoxy WebSocket transport.
-// For Cloudflare ZT: this should be wss://nexus.garfield-math.xyz/wisp/
+// Production example: wss://nexus.garfield-math.xyz/wisp/
 app.get("/api/transport-config", (_req, res) => {
   res.json({
     wispUrl:        resolvePublicWispUrl(_req),
