@@ -34,15 +34,45 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT        = parseInt(process.env.PORT || "37291", 10);
 const HOST        = process.env.HOST || "0.0.0.0";
 const BARE_PREFIX = process.env.BARE_PREFIX || "/bare/";
-const WISP_URL    = process.env.WISP_URL || "ws://127.0.0.1:37292";
+const WISP_URL_RAW = (process.env.WISP_URL || "ws://127.0.0.1:37292").trim();
 const NODE_ENV    = process.env.NODE_ENV || "production";
 const PUBLIC_WISP_URL = (process.env.PUBLIC_WISP_URL || "").trim();
 
-// Parse internal wisp host/port for the WebSocket reverse-proxy
-// e.g. ws://wisp-internal:37292 → host=wisp-internal, port=37292
-const wispParsed = new URL(WISP_URL);
-const WISP_HOST  = wispParsed.hostname;
-const WISP_PORT  = parseInt(wispParsed.port || "37292", 10);
+function resolveInternalWispTarget() {
+  // Parse internal Wisp host/port for the WebSocket reverse-proxy.
+  // Canonical production format: ws://<internal-host>:37292
+  try {
+    const parsed = new URL(WISP_URL_RAW);
+    const badProtocol = parsed.protocol !== "ws:";
+    const badPath = parsed.pathname && parsed.pathname !== "/";
+    if (badProtocol || badPath) {
+      console.warn(
+        "[Config] WISP_URL should be internal ws://<host>:37292 (no path); using ws://127.0.0.1:37292 fallback."
+      );
+      return {
+        wispUrl: "ws://127.0.0.1:37292",
+        host: "127.0.0.1",
+        port: 37292,
+      };
+    }
+    return {
+      wispUrl: parsed.toString(),
+      host: parsed.hostname,
+      port: parseInt(parsed.port || "37292", 10),
+    };
+  } catch {
+    console.warn(
+      "[Config] WISP_URL is not a valid URL; using ws://127.0.0.1:37292 fallback."
+    );
+    return {
+      wispUrl: "ws://127.0.0.1:37292",
+      host: "127.0.0.1",
+      port: 37292,
+    };
+  }
+}
+
+const { wispUrl: WISP_URL, host: WISP_HOST, port: WISP_PORT } = resolveInternalWispTarget();
 
 function inferredPublicWispUrl(req) {
   const forwardedProto = (req.headers["x-forwarded-proto"] || "")
@@ -167,6 +197,15 @@ app.get("/api/transport-config", (_req, res) => {
     barePrefix:     BARE_PREFIX,
     scramjetPrefix: process.env.SCRAMJET_PREFIX || "/scram/",
     uvPrefix:       process.env.UV_PREFIX || "/service/",
+  });
+});
+
+// /wisp/* is WebSocket-upgrade-only. Reject plain HTTP so probes/crawlers
+// do not accidentally hit this path expecting a normal web route.
+app.all("/wisp/*", (_req, res) => {
+  res.status(426).json({
+    error: "Upgrade Required",
+    message: "Use WebSocket upgrade on /wisp/ via the Nexus public domain.",
   });
 });
 
