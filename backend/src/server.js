@@ -2,7 +2,7 @@
  * Nexus Proxy — Main Server
  * Orchestrates: Express HTTP, Bare server (UV transport), WebSocket proxy, metrics
  *
- * Deployment: any reverse-proxy/tunnel in front of Nexus (Cloudflare optional)
+ * Deployment: any reverse-proxy/tunnel in front of Nexus
  *   - Public traffic reaches this process on port 37291
  *   - TLS may be terminated by your edge proxy/tunnel
  *   - /wisp/ WebSocket requests are reverse-proxied internally to wisp:37292
@@ -318,7 +318,7 @@ server.listen(PORT, HOST, () => {
   🌐 Listening on http://${HOST}:${PORT}
   📡 Bare relay at ${BARE_PREFIX}
   🔌 Wisp internal target: ${WISP_HOST}:${WISP_PORT}
-  ☁️  Cloudflare ZT mode — trust proxy: ${app.get("trust proxy")}
+  ☁️  Proxy mode — trust proxy: ${app.get("trust proxy")}
   🌍 Environment: ${NODE_ENV}
   `);
 });
