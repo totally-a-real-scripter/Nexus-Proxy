@@ -237,6 +237,15 @@ Deploy two independent Dockerfile resources instead (documented below).
 
 Deploy this project in Coolify as **two separate resources**.
 
+### Canonical production routing (garfield-math.xyz)
+
+- **Only public app:** `nexus`
+- **Internal-only app:** `wisp`
+- **Public hostname:** `nexus.garfield-math.xyz`
+- **Nexus listen port:** `37291`
+- **Browser WebSocket URL:** `wss://nexus.garfield-math.xyz/wisp/`
+- **Internal Wisp upstream from Nexus:** `ws://<internal-host>:37292`
+
 ### Resource 1: `nexus` (public)
 
 - **Type:** Dockerfile-based application
