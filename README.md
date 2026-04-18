@@ -233,6 +233,24 @@ Deploy two independent Dockerfile resources instead (documented below).
 
 ---
 
+## Deployment Options (Cloudflare optional)
+
+Nexus Proxy does **not** require Cloudflare to run. The required architecture is:
+
+- **Only Nexus is public**
+- **Wisp stays internal-only**
+- **Browser websocket traffic goes through Nexus** (`PUBLIC_WISP_URL`, usually `/wisp/` on the Nexus domain)
+- **Server-side Nexus → Wisp traffic uses internal networking** (`WISP_URL=ws://<internal-host>:37292`)
+
+You can satisfy this architecture with:
+
+- A standard reverse proxy/load balancer (Nginx, Caddy, Traefik, HAProxy, etc.), or
+- Cloudflare Tunnel / Zero Trust (optional, see `cloudflare/` folder).
+
+The `cloudflare/` folder is kept for an optional Cloudflare deployment path; it is not required app logic.
+
+---
+
 ## Coolify Deployment
 
 Deploy this project in Coolify as **two separate resources**.
@@ -245,6 +263,8 @@ Deploy this project in Coolify as **two separate resources**.
 - **Nexus listen port:** `37291`
 - **Browser WebSocket URL:** `wss://nexus.garfield-math.xyz/wisp/`
 - **Internal Wisp upstream from Nexus:** `ws://<internal-host>:37292`
+
+This routing model is the same whether you publish Nexus through a normal reverse proxy or via Cloudflare Tunnel.
 
 ### Resource 1: `nexus` (public)
 
@@ -297,6 +317,7 @@ Set these environment variables on the `wisp` resource:
 - Keep `PUBLIC_WISP_URL` on `nexus` set to `wss://nexus.garfield-math.xyz/wisp/` so browser clients connect through the public `nexus` domain.
 - Do not assign a public domain to `wisp`.
 - Do not configure external HTTP/uptime checks against `wisp:37292` (it is WebSocket-only and internal-only).
+- If you use Cloudflare Tunnel, follow the optional guide in `cloudflare/CLOUDFLARE_SETUP.md`.
 
 ---
 

@@ -1,8 +1,9 @@
-# ── Nexus Proxy — Cloudflare Tunnel Configuration ────────────────────────────
+# ── Nexus Proxy — Optional Cloudflare Tunnel Configuration ───────────────────
 # File: ~/.cloudflared/config.yml  (on your server running cloudflared)
 #
 # This configures cloudflared to forward your public domain to the nexus
 # container running on port 37291 (localhost only).
+# This file is optional and only needed when you choose Cloudflare Tunnel.
 #
 # PREREQUISITES:
 #   1. Install cloudflared on your server

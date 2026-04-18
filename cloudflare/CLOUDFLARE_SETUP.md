@@ -1,4 +1,12 @@
-# Cloudflare Zero Trust Tunnel Setup
+# Optional Cloudflare Zero Trust Tunnel Setup
+
+This guide is an **optional deployment path**.
+Nexus Proxy works without Cloudflare as long as your deployment keeps the same core architecture:
+
+- Nexus is the only public app
+- Wisp remains internal-only
+- Browser clients use `PUBLIC_WISP_URL` on the Nexus domain (`.../wisp/`)
+- Nexus reaches Wisp internally via `WISP_URL=ws://<internal-host>:37292`
 
 ## How traffic flows
 
