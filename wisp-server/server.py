@@ -17,6 +17,7 @@ import logging
 import os
 import struct
 import socket
+from http import HTTPStatus
 from typing import Optional
 
 import websockets
@@ -49,6 +50,20 @@ CLOSE_NETWORK_ERROR  = 0x02
 CLOSE_INVALID        = 0x41
 
 HEADER_SIZE = 5  # type (1) + stream_id (4)
+
+
+async def process_request(_path, request_headers):
+    """Reject plain HTTP traffic cleanly; Wisp is WebSocket-only."""
+    upgrade = (request_headers.get("Upgrade") or "").lower()
+    connection = (request_headers.get("Connection") or "").lower()
+    if upgrade != "websocket" or "upgrade" not in connection:
+        log.debug("Rejected non-WebSocket request on Wisp listener")
+        return (
+            HTTPStatus.UPGRADE_REQUIRED,
+            [("Connection", "close"), ("Content-Type", "text/plain; charset=utf-8")],
+            b"WebSocket upgrade required. Route browser traffic through Nexus /wisp/.\n",
+        )
+    return None
 
 def build_packet(ptype: int, stream_id: int, payload: bytes = b"") -> bytes:
     return struct.pack("<BI", ptype, stream_id) + payload
@@ -131,8 +146,8 @@ class WispStream:
 
 async def handle_connection(ws: WebSocketServerProtocol):
     """Handle one WebSocket connection (= one Wisp session)."""
-    remote = ws.remote_address
-    log.info("New Wisp session from %s:%s", *remote)
+    remote = ws.remote_address or ("unknown", "unknown")
+    log.debug("New Wisp session from %s:%s", *remote)
 
     streams: dict[int, WispStream] = {}
     relay_tasks: dict[int, asyncio.Task] = {}
@@ -193,7 +208,7 @@ async def handle_connection(ws: WebSocketServerProtocol):
                     await streams.pop(stream_id).close(CLOSE_OK)
 
     except websockets.exceptions.ConnectionClosed:
-        log.info("Session from %s:%s closed", *remote)
+        log.debug("Session from %s:%s closed", *remote)
     except Exception as exc:
         log.error("Session error: %s", exc)
     finally:
@@ -202,7 +217,7 @@ async def handle_connection(ws: WebSocketServerProtocol):
             task.cancel()
         for stream in streams.values():
             await stream.close(CLOSE_NETWORK_ERROR)
-        log.info("Session from %s:%s cleaned up", *remote)
+        log.debug("Session from %s:%s cleaned up", *remote)
 
 
 async def main():
@@ -215,6 +230,7 @@ async def main():
         ping_interval=20,
         ping_timeout=20,
         compression=None,  # Disable per-message compression for performance
+        process_request=process_request,
     ):
         log.info("Wisp server ready ✓")
         await asyncio.Future()  # Run forever
