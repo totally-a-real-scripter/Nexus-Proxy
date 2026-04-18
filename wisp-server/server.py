@@ -18,10 +18,10 @@ import os
 import struct
 import socket
 from http import HTTPStatus
-from typing import Optional
+from typing import Any, Optional
 
 import websockets
-from websockets.server import WebSocketServerProtocol
+from websockets.asyncio.server import ServerConnection
 
 # ─── Configuration ─────────────────────────────────────────────────────────────
 HOST        = os.environ.get("WISP_HOST", "0.0.0.0")
@@ -52,16 +52,30 @@ CLOSE_INVALID        = 0x41
 HEADER_SIZE = 5  # type (1) + stream_id (4)
 
 
-async def process_request(_path, request_headers):
+def get_header(request: Any, name: str) -> str:
+    """
+    Read HTTP headers across websockets API versions.
+
+    websockets <= 11 passed `Headers` directly.
+    websockets >= 12 passes a `Request` object with `.headers`.
+    """
+    headers = getattr(request, "headers", request)
+    if headers is None or not hasattr(headers, "get"):
+        return ""
+    value = headers.get(name)
+    return value if isinstance(value, str) else ""
+
+
+async def process_request(connection: ServerConnection, request: Any):
     """Reject plain HTTP traffic cleanly; Wisp is WebSocket-only."""
-    upgrade = (request_headers.get("Upgrade") or "").lower()
-    connection = (request_headers.get("Connection") or "").lower()
-    if upgrade != "websocket" or "upgrade" not in connection:
-        log.debug("Rejected non-WebSocket request on Wisp listener")
-        return (
+    upgrade = get_header(request, "Upgrade").lower()
+    connection_hdr = get_header(request, "Connection").lower()
+    if upgrade != "websocket" or "upgrade" not in connection_hdr:
+        path = getattr(request, "path", "<unknown>")
+        log.debug("Rejected non-WebSocket probe on Wisp listener path=%s", path)
+        return connection.respond(
             HTTPStatus.UPGRADE_REQUIRED,
-            [("Connection", "close"), ("Content-Type", "text/plain; charset=utf-8")],
-            b"WebSocket upgrade required. Route browser traffic through Nexus /wisp/.\n",
+            "WebSocket upgrade required. Route browser traffic through Nexus /wisp/.\n",
         )
     return None
 
@@ -78,7 +92,7 @@ def parse_header(data: bytes) -> tuple[int, int, bytes]:
 class WispStream:
     """Manages a single tunneled TCP stream."""
 
-    def __init__(self, stream_id: int, ws: WebSocketServerProtocol,
+    def __init__(self, stream_id: int, ws: ServerConnection,
                  host: str, port: int):
         self.stream_id = stream_id
         self.ws        = ws
@@ -144,7 +158,7 @@ class WispStream:
         log.debug("Stream %d closed (reason=%d)", self.stream_id, reason)
 
 
-async def handle_connection(ws: WebSocketServerProtocol):
+async def handle_connection(ws: ServerConnection):
     """Handle one WebSocket connection (= one Wisp session)."""
     remote = ws.remote_address or ("unknown", "unknown")
     log.debug("New Wisp session from %s:%s", *remote)
