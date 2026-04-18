@@ -61,12 +61,19 @@ cloudflared tunnel route dns nexus-proxy proxy.yourdomain.com
 In Coolify → your project → Environment Variables, set:
 
 ```
-PUBLIC_WISP_URL = wss://proxy.yourdomain.com/wisp/
-CORS_ORIGIN     = https://proxy.yourdomain.com
+PUBLIC_WISP_URL = wss://nexus.yourdomain.com/wisp/
+CORS_ORIGIN     = https://nexus.yourdomain.com
 ```
 
 The `wss://` scheme is required — Cloudflare always serves HTTPS/WSS.
 The `/wisp/` path (with trailing slash) is required.
+Do **not** create a separate public hostname for Wisp itself.
+
+### 5b. Important: keep Wisp private
+
+- Do not assign a public domain to the Wisp service.
+- Do not add a second Cloudflare tunnel ingress/hostname for Wisp.
+- Do not configure public uptime probes against `:37292` (Wisp is WebSocket-only).
 
 ### 6. Start the tunnel
 
@@ -82,7 +89,7 @@ systemctl enable --now cloudflared
 ### 7. Verify
 
 ```bash
-curl https://proxy.yourdomain.com/health
+curl https://nexus.yourdomain.com/health
 # → {"status":"ok","version":"1.0.0","port":37291,...}
 ```
 
@@ -92,7 +99,7 @@ Since this is a proxy, you probably want to restrict who can use it.
 
 In Zero Trust dashboard → Access → Applications → Add an application:
 - Type: Self-hosted
-- Application domain: proxy.yourdomain.com
+- Application domain: nexus.yourdomain.com
 - Add a policy: allow only your email / identity provider
 
 This means only authenticated users can reach nexus at all — everything
@@ -101,7 +108,7 @@ else gets a Cloudflare Access login page.
 ## WebSocket notes
 
 Cloudflare's tunnel handles WebSocket upgrades automatically. The browser
-connects to `wss://proxy.yourdomain.com/wisp/` — Cloudflare upgrades the
+connects to `wss://nexus.yourdomain.com/wisp/` — Cloudflare upgrades the
 connection, cloudflared pipes it to `http://localhost:37291/wisp/`, and
 nexus's server.js pipes that WebSocket to `wisp:37292` over the Docker
 internal network.

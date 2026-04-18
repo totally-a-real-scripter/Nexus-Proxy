@@ -185,7 +185,9 @@ cp frontend/.env.example frontend/.env     # Frontend Vite env
 Edit `backend/.env`:
 ```env
 WISP_URL=ws://localhost:37292
-PUBLIC_WISP_URL=ws://localhost/wisp/
+# Optional in local dev; if omitted Nexus derives it from incoming host.
+# If you set it, it must point to Nexus (not Wisp):
+PUBLIC_WISP_URL=ws://localhost:3000/wisp/
 NODE_ENV=development
 ```
 
@@ -299,7 +301,7 @@ Set these environment variables on the `wisp` resource:
 | `UV_PREFIX` | `/service/` | Ultraviolet proxy prefix |
 | `SCRAMJET_PREFIX` | `/scram/` | Scramjet proxy prefix |
 | `WISP_URL` | `ws://127.0.0.1:37292` | Internal Wisp WebSocket URL used by Nexus backend |
-| `PUBLIC_WISP_URL` | falls back to `WISP_URL` | Browser-facing Wisp URL |
+| `PUBLIC_WISP_URL` | inferred as `ws(s)://<nexus-host>/wisp/` | Browser-facing Wisp URL (must target Nexus `/wisp/`, never direct `:37292`) |
 | `TRUST_PROXY` | `1` | Express trust proxy hop count |
 | `RATE_LIMIT_WINDOW_MS` | `60000` | Rate limit window in ms |
 | `RATE_LIMIT_MAX` | `200` | Max requests per window |
@@ -333,6 +335,7 @@ This platform is provided for **lawful purposes only**:
 - **Rate limiting** is enabled by default (200 req/min per IP). Adjust `RATE_LIMIT_MAX`.
 - **Domain filtering**: Use `DOMAIN_BLOCKLIST` to block known malicious domains, or `DOMAIN_ALLOWLIST` for strict access control.
 - **Service isolation**: The wisp server and backend run as non-root users in separate containers on an internal Docker network.
+- **No public Wisp exposure**: keep Wisp internal-only — no public domain, no Cloudflare hostname, and no external HTTP health check on port `37292`.
 - **No auth by default**: Add authentication (e.g., HTTP Basic Auth in nginx, or a JWT middleware in Express) before exposing this publicly.
 - **Logging**: Request logs are in-memory only and reset on restart. For persistent audit logs, pipe Docker logs to a log aggregator (Loki, Datadog, etc.).
 
