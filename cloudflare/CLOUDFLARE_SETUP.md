@@ -2,6 +2,13 @@
 
 ## How traffic flows
 
+Canonical assumptions for this repo:
+- Public hostname: `nexus.garfield-math.xyz`
+- Public app: Nexus only (port `37291`)
+- Internal-only app: Wisp only (port `37292`)
+- Browser transport URL: `wss://nexus.garfield-math.xyz/wisp/`
+- Nexus internal upstream: `ws://<internal-host>:37292`
+
 ```
 User's browser
   └─► Cloudflare edge (TLS terminated here, wss:// → ws://)
@@ -43,7 +50,7 @@ cloudflared tunnel create nexus-proxy
 ```bash
 # Edit tunnel-config.yml — replace placeholders:
 #   <TUNNEL_UUID>       → the UUID from step 2
-#   proxy.yourdomain.com → your actual hostname
+#   nexus.garfield-math.xyz → required public Nexus hostname
 
 cp cloudflare/tunnel-config.yml ~/.cloudflared/config.yml
 nano ~/.cloudflared/config.yml
@@ -52,8 +59,8 @@ nano ~/.cloudflared/config.yml
 ### 4. Add a DNS record
 
 ```bash
-# This creates a CNAME record: proxy.yourdomain.com → <UUID>.cfargotunnel.com
-cloudflared tunnel route dns nexus-proxy proxy.yourdomain.com
+# This creates a CNAME record: nexus.garfield-math.xyz → <UUID>.cfargotunnel.com
+cloudflared tunnel route dns nexus-proxy nexus.garfield-math.xyz
 ```
 
 ### 5. Set PUBLIC_WISP_URL in Coolify
@@ -61,8 +68,8 @@ cloudflared tunnel route dns nexus-proxy proxy.yourdomain.com
 In Coolify → your project → Environment Variables, set:
 
 ```
-PUBLIC_WISP_URL = wss://nexus.yourdomain.com/wisp/
-CORS_ORIGIN     = https://nexus.yourdomain.com
+PUBLIC_WISP_URL = wss://nexus.garfield-math.xyz/wisp/
+CORS_ORIGIN     = https://nexus.garfield-math.xyz
 ```
 
 The `wss://` scheme is required — Cloudflare always serves HTTPS/WSS.
@@ -89,7 +96,7 @@ systemctl enable --now cloudflared
 ### 7. Verify
 
 ```bash
-curl https://nexus.yourdomain.com/health
+curl https://nexus.garfield-math.xyz/health
 # → {"status":"ok","version":"1.0.0","port":37291,...}
 ```
 
@@ -99,7 +106,7 @@ Since this is a proxy, you probably want to restrict who can use it.
 
 In Zero Trust dashboard → Access → Applications → Add an application:
 - Type: Self-hosted
-- Application domain: nexus.yourdomain.com
+- Application domain: nexus.garfield-math.xyz
 - Add a policy: allow only your email / identity provider
 
 This means only authenticated users can reach nexus at all — everything
@@ -108,7 +115,7 @@ else gets a Cloudflare Access login page.
 ## WebSocket notes
 
 Cloudflare's tunnel handles WebSocket upgrades automatically. The browser
-connects to `wss://nexus.yourdomain.com/wisp/` — Cloudflare upgrades the
+connects to `wss://nexus.garfield-math.xyz/wisp/` — Cloudflare upgrades the
 connection, cloudflared pipes it to `http://localhost:37291/wisp/`, and
 nexus's server.js pipes that WebSocket to `wisp:37292` over the Docker
 internal network.

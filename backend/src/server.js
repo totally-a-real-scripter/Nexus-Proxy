@@ -160,7 +160,7 @@ app.get("/health", (_req, res) => {
 
 // ─── Transport config (sent to browser on startup) ────────────────────────────
 // The browser uses PUBLIC_WISP_URL to connect its Epoxy WebSocket transport.
-// For Cloudflare ZT: this should be wss://nexus.yourdomain.com/wisp/
+// For Cloudflare ZT: this should be wss://nexus.garfield-math.xyz/wisp/
 app.get("/api/transport-config", (_req, res) => {
   res.json({
     wispUrl:        resolvePublicWispUrl(_req),

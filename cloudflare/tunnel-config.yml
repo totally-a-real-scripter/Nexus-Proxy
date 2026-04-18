@@ -14,16 +14,16 @@
 #
 # In Zero Trust dashboard (one.dash.cloudflare.com):
 #   Networks → Tunnels → nexus-proxy → Public Hostnames → Add a hostname:
-#     Subdomain:  nexus          (or whatever prefix you want)
-#     Domain:     yourdomain.com
+#     Subdomain:  nexus
+#     Domain:     garfield-math.xyz
 #     Service:    HTTP  http://localhost:37291
 #     (Cloudflare handles HTTPS — no need to configure TLS here)
 # ─────────────────────────────────────────────────────────────────────────────
 
-tunnel: d156ab3b-92d6-4a4c-bd3c-eb799c41e9e6
-credentials-file: /root/.cloudflared/d156ab3b-92d6-4a4c-bd3c-eb799c41e9e6.json
+tunnel: <TUNNEL_UUID>
+credentials-file: /root/.cloudflared/<TUNNEL_UUID>.json
 
-# Route all traffic on nexus.yourdomain.com → nexus on localhost:37291
+# Route all traffic on nexus.garfield-math.xyz → nexus on localhost:37291
 # Cloudflare terminates TLS; cloudflared → nexus is plain HTTP.
 ingress:
   - hostname: nexus.garfield-math.xyz
