@@ -17,6 +17,6 @@ USER wisp
 EXPOSE 37292
 
 HEALTHCHECK --interval=15s --timeout=5s --retries=3 \
-  CMD python -c "import socket; s=socket.create_connection(('localhost',37292),2); s.close()"
+  CMD python -c "from websockets.sync.client import connect; connect('ws://127.0.0.1:37292/').close()"
 
 CMD ["python", "-u", "server.py"]

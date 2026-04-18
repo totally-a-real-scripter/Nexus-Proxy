@@ -209,7 +209,7 @@ app.get("/api/transport-config", (_req, res) => {
 
 // /wisp/* is WebSocket-upgrade-only. Reject plain HTTP so probes/crawlers
 // do not accidentally hit this path expecting a normal web route.
-app.all("/wisp/*", (_req, res) => {
+app.all(["/wisp", "/wisp/*"], (_req, res) => {
   res.status(426).json({
     error: "Upgrade Required",
     message: "Use WebSocket upgrade on /wisp/ via the Nexus public domain.",
@@ -250,7 +250,7 @@ server.on("upgrade", (req, socket, head) => {
   });
 
   // ── Route /wisp/ to the internal Wisp container ──────────────────────────
-  if (req.url.startsWith("/wisp/")) {
+  if (/^\/wisp(?:\/|$)/.test(req.url || "")) {
     if (!isWebSocketUpgrade(req)) {
       console.warn("[Wisp proxy] Rejected non-WebSocket upgrade request on /wisp/.");
       socket.end("HTTP/1.1 426 Upgrade Required\r\nConnection: close\r\n\r\n");

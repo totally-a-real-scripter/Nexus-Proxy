@@ -63,7 +63,7 @@ services:
       WISP_PORT: 37292
       LOG_LEVEL: INFO
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('localhost',37292),2); s.close()"]
-      interval: 15s
+      test: ["CMD", "python", "-c", "from websockets.sync.client import connect; connect('ws://127.0.0.1:37292/').close()"]
+      interval: 30s
       timeout: 5s
       retries: 3

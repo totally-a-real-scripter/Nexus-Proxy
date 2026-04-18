@@ -316,6 +316,7 @@ Set these environment variables on the `wisp` resource:
 - Keep `PUBLIC_WISP_URL` on `nexus` set to `wss://nexus.garfield-math.xyz/wisp/` so browser clients connect through the public `nexus` domain.
 - Do not assign a public domain to `wisp`.
 - Do not configure external HTTP/uptime checks against `wisp:37292` (it is WebSocket-only and internal-only).
+- Do not use raw TCP-open probes on `37292`; they trigger expected WebSocket handshake errors. Use a protocol-correct WebSocket health check or an application-level Nexus health endpoint instead.
 
 ---
 
@@ -365,6 +366,7 @@ This platform is provided for **lawful purposes only**:
 - **Domain filtering**: Use `DOMAIN_BLOCKLIST` to block known malicious domains, or `DOMAIN_ALLOWLIST` for strict access control.
 - **Service isolation**: The wisp server and backend run as non-root users in separate containers on an internal Docker network.
 - **No public Wisp exposure**: keep Wisp internal-only — no public domain and no external HTTP health check on port `37292`.
+- **Use protocol-correct checks**: if you health-check Wisp directly, use a real WebSocket handshake; avoid plain HTTP and raw TCP connect probes.
 - **Wisp handshake errors usually indicate misrouting**: repeated `opening handshake failed` / `did not receive a valid HTTP request` logs usually mean a public HTTP probe or misconfigured public hostname is targeting Wisp directly instead of going through Nexus `/wisp/`.
 - **No auth by default**: Add authentication (e.g., HTTP Basic Auth in nginx, or a JWT middleware in Express) before exposing this publicly.
 - **Logging**: Request logs are in-memory only and reset on restart. For persistent audit logs, pipe Docker logs to a log aggregator (Loki, Datadog, etc.).
