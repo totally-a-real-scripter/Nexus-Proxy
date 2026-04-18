@@ -36,12 +36,51 @@ const HOST        = process.env.HOST || "0.0.0.0";
 const BARE_PREFIX = process.env.BARE_PREFIX || "/bare/";
 const WISP_URL    = process.env.WISP_URL || "ws://127.0.0.1:37292";
 const NODE_ENV    = process.env.NODE_ENV || "production";
+const PUBLIC_WISP_URL = (process.env.PUBLIC_WISP_URL || "").trim();
 
 // Parse internal wisp host/port for the WebSocket reverse-proxy
 // e.g. ws://wisp-internal:37292 → host=wisp-internal, port=37292
 const wispParsed = new URL(WISP_URL);
 const WISP_HOST  = wispParsed.hostname;
 const WISP_PORT  = parseInt(wispParsed.port || "37292", 10);
+
+function inferredPublicWispUrl(req) {
+  const forwardedProto = (req.headers["x-forwarded-proto"] || "")
+    .toString()
+    .split(",")[0]
+    .trim()
+    .toLowerCase();
+  const proto = forwardedProto || (req.secure ? "https" : "http");
+  const wsProto = proto === "https" ? "wss" : "ws";
+  const host = req.headers.host || "localhost";
+  return `${wsProto}://${host}/wisp/`;
+}
+
+function resolvePublicWispUrl(req) {
+  // Enforce a browser-facing URL that always points to Nexus /wisp/,
+  // never to the internal Wisp upstream target directly.
+  const fallback = inferredPublicWispUrl(req);
+  if (!PUBLIC_WISP_URL) return fallback;
+
+  try {
+    const parsed = new URL(PUBLIC_WISP_URL);
+    const isWs = parsed.protocol === "ws:" || parsed.protocol === "wss:";
+    const badPort = parsed.port === "37292";
+    const badPath = !parsed.pathname.startsWith("/wisp/");
+    if (!isWs || badPort || badPath) {
+      console.warn(
+        "[Config] PUBLIC_WISP_URL is unsafe/invalid; using inferred Nexus /wisp/ URL instead."
+      );
+      return fallback;
+    }
+    return PUBLIC_WISP_URL;
+  } catch {
+    console.warn(
+      "[Config] PUBLIC_WISP_URL is not a valid URL; using inferred Nexus /wisp/ URL instead."
+    );
+    return fallback;
+  }
+}
 
 // ─── Bare Server (Ultraviolet transport layer) ────────────────────────────────
 // The Bare server acts as the HTTP(S) relay between UV/Scramjet and the target.
@@ -121,10 +160,10 @@ app.get("/health", (_req, res) => {
 
 // ─── Transport config (sent to browser on startup) ────────────────────────────
 // The browser uses PUBLIC_WISP_URL to connect its Epoxy WebSocket transport.
-// For Cloudflare ZT: this will be wss://proxy.yourdomain.com/wisp/
+// For Cloudflare ZT: this should be wss://nexus.yourdomain.com/wisp/
 app.get("/api/transport-config", (_req, res) => {
   res.json({
-    wispUrl:        process.env.PUBLIC_WISP_URL || WISP_URL,
+    wispUrl:        resolvePublicWispUrl(_req),
     barePrefix:     BARE_PREFIX,
     scramjetPrefix: process.env.SCRAMJET_PREFIX || "/scram/",
     uvPrefix:       process.env.UV_PREFIX || "/service/",
