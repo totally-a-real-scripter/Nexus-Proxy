@@ -187,7 +187,7 @@ Edit `backend/.env`:
 WISP_URL=ws://localhost:37292
 # Optional in local dev; if omitted Nexus derives it from incoming host.
 # If you set it, it must point to Nexus (not Wisp):
-PUBLIC_WISP_URL=ws://localhost:3000/wisp/
+PUBLIC_WISP_URL=ws://localhost:5173/wisp/
 NODE_ENV=development
 ```
 
@@ -211,10 +211,10 @@ npm run dev
 ```bash
 cd frontend
 npm run dev
-# http://localhost:3000 (proxied to backend via vite.config.js)
+# http://localhost:5173 (proxied to backend via vite.config.js)
 ```
 
-Open **http://localhost:3000** in your browser.
+Open **http://localhost:5173** in your browser.
 
 ---
 
@@ -296,6 +296,7 @@ Set these environment variables on the `wisp` resource:
 - Configure `nexus` `WISP_URL` to the **internal Coolify hostname** of your `wisp` resource.
 - Keep `PUBLIC_WISP_URL` on `nexus` set to `wss://nexus.garfield-math.xyz/wisp/` so browser clients connect through the public `nexus` domain.
 - Do not assign a public domain to `wisp`.
+- Do not configure external HTTP/uptime checks against `wisp:37292` (it is WebSocket-only and internal-only).
 
 ---
 
@@ -345,6 +346,7 @@ This platform is provided for **lawful purposes only**:
 - **Domain filtering**: Use `DOMAIN_BLOCKLIST` to block known malicious domains, or `DOMAIN_ALLOWLIST` for strict access control.
 - **Service isolation**: The wisp server and backend run as non-root users in separate containers on an internal Docker network.
 - **No public Wisp exposure**: keep Wisp internal-only — no public domain, no Cloudflare hostname, and no external HTTP health check on port `37292`.
+- **Wisp handshake errors usually indicate misrouting**: repeated `opening handshake failed` / `did not receive a valid HTTP request` logs usually mean a public HTTP probe or misconfigured public hostname is targeting Wisp directly instead of going through Nexus `/wisp/`.
 - **No auth by default**: Add authentication (e.g., HTTP Basic Auth in nginx, or a JWT middleware in Express) before exposing this publicly.
 - **Logging**: Request logs are in-memory only and reset on restart. For persistent audit logs, pipe Docker logs to a log aggregator (Loki, Datadog, etc.).
 
