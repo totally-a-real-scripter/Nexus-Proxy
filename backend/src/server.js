@@ -74,6 +74,13 @@ function resolveInternalWispTarget() {
 
 const { wispUrl: WISP_URL, host: WISP_HOST, port: WISP_PORT } = resolveInternalWispTarget();
 
+function isWebSocketUpgrade(req) {
+  const upgrade = (req.headers.upgrade || "").toString().toLowerCase();
+  const connection = (req.headers.connection || "").toString().toLowerCase();
+  const wsKey = req.headers["sec-websocket-key"];
+  return upgrade === "websocket" && connection.includes("upgrade") && Boolean(wsKey);
+}
+
 function inferredPublicWispUrl(req) {
   const forwardedProto = (req.headers["x-forwarded-proto"] || "")
     .toString()
@@ -244,6 +251,12 @@ server.on("upgrade", (req, socket, head) => {
 
   // ── Route /wisp/ to the internal Wisp container ──────────────────────────
   if (req.url.startsWith("/wisp/")) {
+    if (!isWebSocketUpgrade(req)) {
+      console.warn("[Wisp proxy] Rejected non-WebSocket upgrade request on /wisp/.");
+      socket.end("HTTP/1.1 426 Upgrade Required\r\nConnection: close\r\n\r\n");
+      return;
+    }
+
     // Strip /wisp/ prefix so the Wisp server sees a plain WebSocket path
     const wispPath = req.url.slice("/wisp".length) || "/";
 
