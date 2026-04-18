@@ -31,6 +31,7 @@ services:
       WISP_URL: ws://wisp:37292
 
       # Browser-facing websocket URL served by Nexus transport config.
+      # Must point to Nexus /wisp/ (never direct :37292).
       PUBLIC_WISP_URL: ws://localhost:37291/wisp/
 
       FRONTEND_PATH: /app/frontend/dist
