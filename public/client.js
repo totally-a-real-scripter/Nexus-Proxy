@@ -8,6 +8,7 @@ const proxyFrame = document.getElementById("proxyFrame");
 
 let swReadyPromise;
 let transportReadyPromise;
+let scramjetReadyPromise;
 let hasNavigated = false;
 let lastScrollY = 0;
 let hideTimer;
@@ -29,13 +30,6 @@ function normalizeInput(raw) {
   return `https://www.google.com/search?q=${encodeURIComponent(value)}`;
 }
 
-function encodeProxiedUrl(url) {
-  if (!self.__uv$config?.encodeUrl) {
-    throw new Error("Ultraviolet config is unavailable.");
-  }
-  return `${PROXY_PREFIX}${self.__uv$config.encodeUrl(url)}`;
-}
-
 async function ensureTransport() {
   if (transportReadyPromise) return transportReadyPromise;
 
@@ -49,6 +43,7 @@ async function ensureTransport() {
       (window.location.protocol === "https:" ? "wss://" : "ws://") +
       window.location.host +
       WISP_PATH;
+
     await conn.setTransport("/epoxy/index.mjs", [{ wisp: wispUrl }]);
   })();
 
@@ -73,6 +68,31 @@ async function ensureServiceWorker() {
   })();
 
   return swReadyPromise;
+}
+
+async function ensureScramjetController() {
+  if (scramjetReadyPromise) return scramjetReadyPromise;
+
+  scramjetReadyPromise = (async () => {
+    if (typeof window.$scramjetLoadController !== "function") {
+      throw new Error("Scramjet bundle did not load.");
+    }
+
+    const { ScramjetController } = window.$scramjetLoadController();
+    const controller = new ScramjetController({
+      prefix: PROXY_PREFIX,
+      files: {
+        wasm: "/scram/scramjet.wasm.wasm",
+        all: "/scram/scramjet.all.js",
+        sync: "/scram/scramjet.sync.js"
+      }
+    });
+
+    await controller.init();
+    return controller;
+  })();
+
+  return scramjetReadyPromise;
 }
 
 function focusAddressBar(selectAll = true) {
@@ -105,8 +125,9 @@ async function navigate(inputValue) {
   if (!target) return;
 
   await Promise.all([ensureTransport(), ensureServiceWorker()]);
+  const scramjet = await ensureScramjetController();
 
-  const proxied = encodeProxiedUrl(target);
+  const proxied = scramjet.encodeUrl(target);
   proxyFrame.src = proxied;
   addressInput.value = target;
 
