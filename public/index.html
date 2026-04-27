@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nexus Proxy</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script src="/uv/uv.bundle.js" defer></script>
+    <script src="/uv.config.js" defer></script>
+    <script src="/baremux/index.js" defer></script>
+    <script src="/client.js" defer></script>
+  </head>
+  <body>
+    <main class="app-shell" id="appShell">
+      <header class="omnibar-wrap is-centered is-visible" id="omnibarWrap">
+        <form id="navForm" class="omnibar" autocomplete="off" spellcheck="false">
+          <input
+            id="addressInput"
+            type="text"
+            inputmode="url"
+            placeholder="https://example.com"
+            aria-label="Address or search"
+          />
+        </form>
+      </header>
+
+      <section class="viewport" id="viewport">
+        <iframe
+          id="proxyFrame"
+          title="Proxied content"
+          referrerpolicy="no-referrer"
+          allow="clipboard-read; clipboard-write"
+        ></iframe>
+      </section>
+    </main>
+  </body>
+</html>
