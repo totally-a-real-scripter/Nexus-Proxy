@@ -36,10 +36,6 @@ function encodeProxiedUrl(url) {
   return `${PROXY_PREFIX}${self.__uv$config.encodeUrl(url)}`;
 }
 
-function wsProtocol() {
-  return window.location.protocol === "https:" ? "wss:" : "ws:";
-}
-
 async function ensureTransport() {
   if (transportReadyPromise) return transportReadyPromise;
 
@@ -49,7 +45,10 @@ async function ensureTransport() {
     }
 
     const conn = new window.BareMux.BareMuxConnection("/baremux/worker.js");
-    const wispUrl = `${wsProtocol()}//${window.location.host}${WISP_PATH}`;
+    const wispUrl =
+      (window.location.protocol === "https:" ? "wss://" : "ws://") +
+      window.location.host +
+      WISP_PATH;
     await conn.setTransport("/epoxy/index.mjs", [{ wisp: wispUrl }]);
   })();
 

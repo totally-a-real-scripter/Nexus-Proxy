@@ -29,11 +29,36 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use((req, _res, next) => {
+  if (req.url.startsWith(PROXY_PREFIX)) {
+    console.info(`[proxy:req] ${req.method} ${req.originalUrl} path=${req.path}`);
+  }
+  next();
+});
+
 app.use(compression());
 
 app.get("/health", (_req, res) => {
   res.json({ status: "alive" });
 });
+
+const setNoStoreHeaders = (res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  res.setHeader("Surrogate-Control", "no-store");
+};
+
+app.get("/sw.js", (_req, res) => {
+  setNoStoreHeaders(res);
+  res.sendFile(join(__dirname, "public", "sw.js"));
+});
+
+app.get("/uv.config.js", (_req, res) => {
+  setNoStoreHeaders(res);
+  res.sendFile(join(__dirname, "public", "uv.config.js"));
+});
+
 
 app.use(
   express.static(join(__dirname, "public"), {
@@ -42,23 +67,30 @@ app.use(
   })
 );
 
-app.use(
-  ["/sw.js", "/uv.config.js"],
-  express.static(join(__dirname, "public"), {
-    etag: true,
-    maxAge: 0,
-    setHeaders: (res) => {
+app.use("/uv/", express.static(uvPath, {
+  maxAge: "1d",
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith("uv.sw.js")) {
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
       res.setHeader("Pragma", "no-cache");
       res.setHeader("Expires", "0");
       res.setHeader("Surrogate-Control", "no-store");
     }
-  })
-);
-
-app.use("/uv/", express.static(uvPath, { maxAge: "1d" }));
+  }
+}));
 app.use("/baremux/", express.static(baremuxPath, { maxAge: "1d" }));
 app.use("/epoxy/", express.static(epoxyPath, { maxAge: "1d" }));
+
+app.use((err, req, res, _next) => {
+  console.error("[express:error]", {
+    method: req.method,
+    url: req.originalUrl,
+    path: req.path,
+    stack: err?.stack || err
+  });
+
+  res.status(500).send(`<!doctype html><html><head><title>Proxy Error</title></head><body><h1>Proxy Error</h1><p>Request failed while proxying <code>${req.originalUrl}</code>.</p></body></html>`);
+});
 
 app.use((req, res) => {
   if (req.method === "GET") {
@@ -70,11 +102,18 @@ app.use((req, res) => {
 const server = createServer(app);
 
 server.on("upgrade", (req, socket, head) => {
-  if (req.url?.startsWith(WISP_ENDPOINT)) {
+  const reqUrl = req.url || "";
+  const parsed = new URL(reqUrl, `http://${req.headers.host || "localhost"}`);
+  const didUpgrade = parsed.pathname === WISP_ENDPOINT;
+
+  console.info(`[wisp:upgrade] url=${reqUrl} pathname=${parsed.pathname} match=${didUpgrade}`);
+
+  if (didUpgrade) {
     wisp.routeRequest(req, socket, head);
-  } else {
-    socket.destroy();
+    return;
   }
+
+  socket.destroy();
 });
 
 server.listen(PORT, HOST, () => {
@@ -102,6 +141,14 @@ const shutdown = (signal) => {
     process.exit(1);
   }, 10000).unref();
 };
+
+process.on("uncaughtException", (error) => {
+  console.error("[uncaughtException]", error?.stack || error);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandledRejection]", reason);
+});
 
 process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
