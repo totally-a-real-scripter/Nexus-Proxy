@@ -1,5 +1,5 @@
 const WISP_PATH = "/wisp/";
-const ASSET_VERSION = "scramjet-11";
+const ASSET_VERSION = "scramjet-12";
 
 const SCRAMJET_DB_NAMES = ["$scramjet", "scramjet", "bare-mux", "baremux", "epoxy", "proxy-transports"];
 const SCRAMJET_STORAGE_KEYS = ["scramjet", "$scramjet", "bare-mux-path", "baremux"];
@@ -9,7 +9,9 @@ const searchForm = document.getElementById("searchForm");
 const urlInput = document.getElementById("urlInput");
 const proxyFrame = document.getElementById("proxyFrame");
 const spotlightToggle = document.getElementById("spotlightToggle");
+const spotlightPanel = document.getElementById("searchForm");
 const clearInput = document.getElementById("clearInput");
+const shortcutDock = document.getElementById("shortcutDock");
 const resetPanel = document.getElementById("resetPanel");
 const retryInitBtn = document.getElementById("retryInitBtn");
 const resetProxyStorageBtn = document.getElementById("resetProxyStorageBtn");
@@ -36,6 +38,7 @@ let serviceWorkerReadyPromise = null;
 let transportReadyPromise = null;
 let scramjetReadyPromise = null;
 let hasInitRetried = false;
+let hasLoadedContent = false;
 
 function normalizeInput(raw) {
   const value = raw.trim();
@@ -59,12 +62,12 @@ function syncSpotlightState() {
   const hasValue = !!urlInput.value.trim();
 
   spotlightShell.classList.toggle("has-value", hasValue);
-  spotlightShell.classList.toggle("is-typing", hasValue);
+  spotlightShell.classList.toggle("is-typing", hasValue && !spotlightShell.classList.contains("is-condensed"));
 }
 
-function openSpotlight({ focus = true } = {}) {
+function expandSpotlight({ focus = true } = {}) {
   clearTimeout(collapseTimer);
-  spotlightShell.classList.remove("is-hidden");
+  spotlightShell.classList.remove("is-hidden", "is-condensed");
   spotlightShell.classList.add("is-open");
 
   if (focus) {
@@ -75,10 +78,18 @@ function openSpotlight({ focus = true } = {}) {
   }
 }
 
+function condenseSpotlight() {
+  clearTimeout(collapseTimer);
+  spotlightShell.classList.remove("is-open", "is-focused", "is-typing", "is-hidden");
+  spotlightShell.classList.add("is-condensed");
+  urlInput.blur();
+  syncSpotlightState();
+}
+
 function closeSpotlight({ force = false } = {}) {
   if (!force && urlInput.value.trim()) return;
 
-  spotlightShell.classList.remove("is-open", "is-focused", "is-typing");
+  spotlightShell.classList.remove("is-open", "is-focused", "is-typing", "is-condensed");
   urlInput.blur();
 }
 
@@ -87,7 +98,11 @@ function scheduleCollapse() {
 
   collapseTimer = setTimeout(() => {
     if (document.activeElement !== urlInput && !urlInput.value.trim()) {
-      closeSpotlight({ force: true });
+      if (hasLoadedContent) {
+        condenseSpotlight();
+      } else {
+        closeSpotlight({ force: true });
+      }
     }
   }, 2000);
 }
@@ -238,6 +253,7 @@ function bindUIEvents() {
   hasBoundEvents = true;
 
   urlInput.addEventListener("focus", () => {
+    spotlightShell.classList.remove("is-condensed");
     spotlightShell.classList.add("is-focused", "is-open");
     requestAnimationFrame(() => urlInput.select());
   });
@@ -252,19 +268,32 @@ function bindUIEvents() {
   clearInput.addEventListener("click", () => {
     urlInput.value = "";
     syncSpotlightState();
-    openSpotlight({ focus: true });
+    expandSpotlight({ focus: true });
+  });
+
+  spotlightPanel?.addEventListener("click", () => {
+    if (spotlightShell.classList.contains("is-condensed")) {
+      expandSpotlight({ focus: true });
+    }
   });
 
   spotlightToggle.addEventListener("click", () => {
+    if (spotlightShell.classList.contains("is-condensed")) {
+      expandSpotlight({ focus: true });
+      return;
+    }
+
     const isOpen =
       spotlightShell.classList.contains("is-open") ||
       spotlightShell.classList.contains("is-focused") ||
       spotlightShell.classList.contains("is-typing");
 
-    if (isOpen && !urlInput.value.trim()) {
+    if (isOpen && !urlInput.value.trim() && hasLoadedContent) {
+      condenseSpotlight();
+    } else if (isOpen && !urlInput.value.trim()) {
       closeSpotlight({ force: true });
     } else {
-      openSpotlight({ focus: true });
+      expandSpotlight({ focus: true });
     }
   });
 
@@ -273,9 +302,53 @@ function bindUIEvents() {
 
     try {
       await navigate(urlInput.value);
-      scheduleCollapse();
+      hasLoadedContent = true;
+      condenseSpotlight();
     } catch (error) {
       console.error("[navigate] failed", error);
+      expandSpotlight({ focus: true });
+    }
+  });
+
+  shortcutDock?.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-action]");
+    if (!button) return;
+
+    const action = button.dataset.action;
+
+    if (action === "go") {
+      if (urlInput.value.trim()) {
+        try {
+          await navigate(urlInput.value);
+          hasLoadedContent = true;
+          condenseSpotlight();
+        } catch (error) {
+          console.error("[shortcut go] failed", error);
+          expandSpotlight({ focus: true });
+        }
+      }
+      return;
+    }
+
+    if (action === "focus") {
+      expandSpotlight({ focus: true });
+      return;
+    }
+
+    if (action === "close") {
+      if (urlInput.value.trim()) {
+        urlInput.value = "";
+        syncSpotlightState();
+      } else if (hasLoadedContent) {
+        condenseSpotlight();
+      } else {
+        closeSpotlight({ force: true });
+      }
+      return;
+    }
+
+    if (action === "hide") {
+      condenseSpotlight();
     }
   });
 
@@ -284,7 +357,7 @@ function bindUIEvents() {
 
     if ((isMac ? event.metaKey : event.ctrlKey) && event.key.toLowerCase() === "l") {
       event.preventDefault();
-      openSpotlight({ focus: true });
+      expandSpotlight({ focus: true });
       return;
     }
 
@@ -292,6 +365,8 @@ function bindUIEvents() {
       if (urlInput.value.trim()) {
         urlInput.value = "";
         syncSpotlightState();
+      } else if (hasLoadedContent) {
+        condenseSpotlight();
       } else {
         closeSpotlight({ force: true });
       }
@@ -299,9 +374,13 @@ function bindUIEvents() {
     }
 
     if (event.key === "ArrowDown") {
-      if (document.activeElement !== urlInput || spotlightShell.classList.contains("is-hidden")) {
+      if (
+        spotlightShell.classList.contains("is-condensed") ||
+        spotlightShell.classList.contains("is-hidden") ||
+        document.activeElement !== urlInput
+      ) {
         event.preventDefault();
-        openSpotlight({ focus: true });
+        expandSpotlight({ focus: true });
       }
       return;
     }
@@ -309,7 +388,11 @@ function bindUIEvents() {
     if (event.key === "ArrowUp") {
       if (document.activeElement !== urlInput || !urlInput.value.trim()) {
         event.preventDefault();
-        closeSpotlight({ force: true });
+        if (!urlInput.value.trim() && hasLoadedContent) {
+          condenseSpotlight();
+        } else {
+          closeSpotlight({ force: true });
+        }
       }
     }
   });

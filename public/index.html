@@ -4,9 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Nexus Proxy</title>
-    <link rel="stylesheet" href="/style.css?v=scramjet-11" />
-    <script src="/baremux/index.js?v=scramjet-11"></script>
-    <script src="/epoxy/index.js?v=scramjet-11"></script>
+    <link rel="stylesheet" href="/style.css?v=scramjet-12" />
+    <script src="/baremux/index.js?v=scramjet-12"></script>
+    <script src="/epoxy/index.js?v=scramjet-12"></script>
   </head>
   <body>
     <iframe id="proxyFrame" class="proxy-frame" title="Proxied content"></iframe>
@@ -39,6 +39,13 @@
         </div>
       </form>
 
+      <div id="shortcutDock" class="shortcut-dock" aria-hidden="true">
+        <button class="shortcut-bubble" type="button" data-action="go" title="Go">⏎</button>
+        <button class="shortcut-bubble" type="button" data-action="focus" title="Focus">⌘L</button>
+        <button class="shortcut-bubble" type="button" data-action="close" title="Close">Esc</button>
+        <button class="shortcut-bubble" type="button" data-action="hide" title="Hide">↑</button>
+      </div>
+
       <button id="spotlightToggle" class="spotlight-toggle" type="button" aria-label="Toggle search">
         <span class="toggle-arrow">⌄</span>
       </button>
@@ -53,7 +60,7 @@
       </div>
     </section>
 
-    <script src="/scram/scramjet.all.js?v=scramjet-11"></script>
-    <script src="/client.js?v=scramjet-11" defer></script>
+    <script src="/scram/scramjet.all.js?v=scramjet-12"></script>
+    <script src="/client.js?v=scramjet-12" defer></script>
   </body>
 </html>

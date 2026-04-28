@@ -1,10 +1,12 @@
 :root {
   --spotlight-width-collapsed: min(390px, calc(100vw - 32px));
   --spotlight-width-open: min(720px, calc(100vw - 32px));
-  --glass-bg: rgba(245, 247, 255, 0.14);
-  --glass-bg-open: rgba(245, 247, 255, 0.22);
-  --glass-border: rgba(255, 255, 255, 0.28);
-  --glass-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+  --spotlight-condensed-size: 46px;
+  --glass-bg: rgba(245, 247, 255, 0.08);
+  --glass-bg-open: rgba(245, 247, 255, 0.14);
+  --glass-bg-condensed: rgba(245, 247, 255, 0.10);
+  --glass-border: rgba(255, 255, 255, 0.24);
+  --glass-shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
 }
 
 * {
@@ -42,13 +44,19 @@ body {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
-  transition: width 420ms cubic-bezier(.2, .9, .2, 1), transform 420ms cubic-bezier(.2, .9, .2, 1), opacity 220ms ease;
+  transition: width 420ms cubic-bezier(.2, .9, .2, 1), min-width 420ms cubic-bezier(.2, .9, .2, 1),
+    transform 420ms cubic-bezier(.2, .9, .2, 1), opacity 220ms ease;
 }
 
 .spotlight-shell.is-open,
 .spotlight-shell.is-focused,
 .spotlight-shell.is-typing {
   width: var(--spotlight-width-open);
+}
+
+.spotlight-shell.is-condensed {
+  width: var(--spotlight-condensed-size);
+  min-width: var(--spotlight-condensed-size);
 }
 
 .spotlight-shell.is-hidden {
@@ -62,10 +70,10 @@ body {
   overflow: hidden;
   border-radius: 999px;
   border: 1px solid var(--glass-border);
-  background: linear-gradient(135deg, rgba(255, 255, 255, .34), rgba(255, 255, 255, .08)), var(--glass-bg);
-  box-shadow: var(--glass-shadow), inset 0 1px 0 rgba(255, 255, 255, .52), inset 0 -1px 0 rgba(255, 255, 255, .10);
-  backdrop-filter: blur(30px) saturate(180%);
-  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  background: linear-gradient(135deg, rgba(255, 255, 255, .24), rgba(255, 255, 255, .04)), var(--glass-bg);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 rgba(255, 255, 255, .42), inset 0 -1px 0 rgba(255, 255, 255, .07);
+  backdrop-filter: blur(32px) saturate(190%);
+  -webkit-backdrop-filter: blur(32px) saturate(190%);
   transition: background 260ms ease, box-shadow 260ms ease, transform 360ms cubic-bezier(.2, .9, .2, 1);
 }
 
@@ -94,10 +102,21 @@ body {
 .spotlight-shell.is-open .spotlight-panel,
 .spotlight-shell.is-focused .spotlight-panel,
 .spotlight-shell.is-typing .spotlight-panel {
-  background: linear-gradient(135deg, rgba(255, 255, 255, .42), rgba(255, 255, 255, .12)), var(--glass-bg-open);
-  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.48), 0 0 48px rgba(145, 175, 255, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, .55), inset 0 -1px 0 rgba(255, 255, 255, .12);
+  background: linear-gradient(135deg, rgba(255, 255, 255, .30), rgba(255, 255, 255, .07)), var(--glass-bg-open);
+  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.40), 0 0 48px rgba(145, 175, 255, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, .48), inset 0 -1px 0 rgba(255, 255, 255, .10);
   transform: scale(1.01);
+}
+
+.spotlight-shell.is-condensed .spotlight-panel {
+  width: var(--spotlight-condensed-size);
+  height: var(--spotlight-condensed-size);
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, .30), rgba(255, 255, 255, .06)), var(--glass-bg-condensed);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.34), 0 0 28px rgba(145, 175, 255, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, .48), inset 0 -1px 0 rgba(255, 255, 255, .08);
+  transform: scale(1);
+  cursor: pointer;
 }
 
 .spotlight-shell.is-open .spotlight-panel::after,
@@ -114,13 +133,21 @@ body {
   align-items: center;
   gap: 13px;
   padding: 0 20px;
-  transition: height 320ms cubic-bezier(.2, .9, .2, 1);
+  transition: height 320ms cubic-bezier(.2, .9, .2, 1), padding 320ms cubic-bezier(.2, .9, .2, 1);
 }
 
 .spotlight-shell.is-open .spotlight-input-row,
 .spotlight-shell.is-focused .spotlight-input-row,
 .spotlight-shell.is-typing .spotlight-input-row {
   height: 64px;
+}
+
+.spotlight-shell.is-condensed .spotlight-input-row {
+  height: var(--spotlight-condensed-size);
+  width: var(--spotlight-condensed-size);
+  padding: 0;
+  justify-content: center;
+  gap: 0;
 }
 
 .spotlight-icon {
@@ -133,9 +160,29 @@ body {
   opacity: 0.92;
 }
 
+.spotlight-shell.is-condensed .spotlight-icon {
+  width: 22px;
+  height: 22px;
+  opacity: 0.96;
+}
+
 .spotlight-icon svg {
   width: 100%;
   height: 100%;
+}
+
+.spotlight-input,
+.spotlight-clear {
+  transition: opacity 180ms ease, transform 220ms ease;
+}
+
+.spotlight-shell.is-condensed .spotlight-input,
+.spotlight-shell.is-condensed .spotlight-clear {
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.92);
+  width: 0;
+  flex: 0 0 0;
 }
 
 .spotlight-input {
@@ -200,6 +247,58 @@ body {
   transition: transform 180ms ease, opacity 180ms ease, background 180ms ease;
 }
 
+.shortcut-dock {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 50%;
+  z-index: 4;
+  display: flex;
+  gap: 10px;
+  transform: translate(-50%, -8px) scale(0.96);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease, transform 320ms cubic-bezier(.2, .9, .2, 1);
+}
+
+.spotlight-shell.is-open:not(.is-condensed) .shortcut-dock,
+.spotlight-shell.is-focused:not(.is-condensed) .shortcut-dock,
+.spotlight-shell.is-typing:not(.is-condensed) .shortcut-dock {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, 0) scale(1);
+}
+
+.shortcut-bubble {
+  height: 38px;
+  min-width: 38px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, .22);
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, .22), rgba(255, 255, 255, .06)), rgba(245, 247, 255, 0.08);
+  color: rgba(255, 255, 255, .84);
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  cursor: pointer;
+  backdrop-filter: blur(22px) saturate(170%);
+  -webkit-backdrop-filter: blur(22px) saturate(170%);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .22), inset 0 1px 0 rgba(255, 255, 255, .36);
+  transition: transform 180ms ease, background 180ms ease, opacity 180ms ease;
+}
+
+.shortcut-bubble:hover {
+  transform: translateY(-1px) scale(1.04);
+  background: linear-gradient(135deg, rgba(255, 255, 255, .30), rgba(255, 255, 255, .08)), rgba(245, 247, 255, 0.12);
+}
+
+.spotlight-shell.is-condensed .shortcut-dock {
+  display: none;
+}
+
+.spotlight-shell.is-condensed .spotlight-toggle {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .spotlight-toggle:hover {
   transform: translateX(-50%) scale(1.07);
   background: rgba(255, 255, 255, .24);
@@ -254,6 +353,17 @@ body {
     --spotlight-width-open: calc(100vw - 24px);
   }
 
+  .shortcut-bubble {
+    min-width: 34px;
+    height: 34px;
+    padding: 0 9px;
+    font-size: 12px;
+  }
+
+  .shortcut-dock {
+    gap: 7px;
+  }
+
   .spotlight-shell {
     top: max(14px, env(safe-area-inset-top));
   }
@@ -269,6 +379,8 @@ body {
   .spotlight-input-row,
   .spotlight-clear,
   .spotlight-toggle,
+  .shortcut-dock,
+  .shortcut-bubble,
   .toggle-arrow {
     transition: none !important;
   }
