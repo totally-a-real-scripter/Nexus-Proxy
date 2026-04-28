@@ -1,5 +1,5 @@
 const WISP_PATH = "/wisp/";
-const ASSET_VERSION = "scramjet-7";
+const ASSET_VERSION = "scramjet-8";
 const STORAGE_KEY = "proxy.searchEngines.v1";
 const DEV =
   window.location.hostname === "localhost" ||
@@ -20,9 +20,9 @@ const BUILTIN_ENGINES = [
 
 const spotlightShell = document.getElementById("spotlightShell");
 const spotlightToggle = document.getElementById("spotlightToggle");
-const toggleArrow = document.getElementById("toggleArrow");
 const navForm = document.getElementById("navForm");
 const addressInput = document.getElementById("addressInput");
+const clearInput = document.getElementById("clearInput");
 const proxyFrame = document.getElementById("proxyFrame");
 const engineRow = document.getElementById("engineRow");
 const toggleCustomEditorBtn = document.getElementById("toggleCustomEditor");
@@ -38,13 +38,18 @@ const resetProxyStorageBtn = document.getElementById("resetProxyStorageBtn");
 let swReadyPromise;
 let transportReadyPromise;
 let scramjetReadyPromise;
-let appBootPromise;
+let proxyReadyPromise;
 let scramjetFrame;
-let isSpotlightOpen = true;
 let selectedEngineId = "google";
 let hasInitRetried = false;
 let navToken = 0;
 let chipFocusIndex = -1;
+let collapseTimer;
+let isOpen = false;
+let isFocused = false;
+let hasValue = false;
+let revealRaf = 0;
+let didBindEvents = false;
 
 const engineState = {
   defaultEngineId: "google",
@@ -94,6 +99,55 @@ function getEngines() {
 
 function getEngineById(id) {
   return getEngines().find((engine) => engine.id === id) || BUILTIN_ENGINES[0];
+}
+
+function syncSpotlightState() {
+  hasValue = !!addressInput.value.trim();
+  spotlightShell.classList.toggle("has-value", hasValue);
+  spotlightShell.classList.toggle("is-typing", hasValue);
+  addressInput.placeholder = hasValue || isOpen || isFocused ? "Spotlight Search" : "Search or enter URL";
+}
+
+function setOpenState(nextOpen) {
+  isOpen = nextOpen;
+  spotlightShell.classList.toggle("is-open", isOpen);
+  spotlightToggle.setAttribute("aria-expanded", String(isOpen));
+}
+
+function setFocusedState(nextFocused) {
+  isFocused = nextFocused;
+  spotlightShell.classList.toggle("is-focused", isFocused);
+}
+
+function openSpotlight({ focus = true } = {}) {
+  clearTimeout(collapseTimer);
+  spotlightShell.classList.remove("is-hidden");
+  setOpenState(true);
+  syncSpotlightState();
+
+  if (focus) {
+    requestAnimationFrame(() => addressInput.focus({ preventScroll: true }));
+  }
+}
+
+function closeSpotlight({ force = false } = {}) {
+  if (!force && addressInput.value.trim()) return;
+
+  setOpenState(false);
+  setFocusedState(false);
+  spotlightShell.classList.remove("is-typing");
+  addressInput.blur();
+  syncSpotlightState();
+}
+
+function scheduleCollapse() {
+  clearTimeout(collapseTimer);
+
+  collapseTimer = setTimeout(() => {
+    if (document.activeElement !== addressInput && !addressInput.value.trim()) {
+      closeSpotlight({ force: true });
+    }
+  }, 2000);
 }
 
 function renderEngineChips() {
@@ -153,6 +207,7 @@ function validateEngineInput(name, template) {
 function openCustomEditor() {
   customEngineEditor.hidden = false;
   customEditorError.textContent = "";
+  openSpotlight({ focus: false });
   customEngineName.focus({ preventScroll: true });
 }
 
@@ -297,7 +352,7 @@ function resetInitState() {
   swReadyPromise = undefined;
   transportReadyPromise = undefined;
   scramjetReadyPromise = undefined;
-  appBootPromise = undefined;
+  proxyReadyPromise = undefined;
   scramjetFrame = undefined;
   window.__scramjetInstance = undefined;
 }
@@ -308,9 +363,9 @@ async function initScramjet() {
   await ensureServiceWorker();
 }
 
-async function ensureAppReady() {
-  if (!appBootPromise) {
-    appBootPromise = initScramjet().catch(async (error) => {
+async function ensureProxyReady() {
+  if (!proxyReadyPromise) {
+    proxyReadyPromise = initScramjet().catch(async (error) => {
       if (hasInitRetried) throw error;
       hasInitRetried = true;
       await resetScramjetStorage();
@@ -323,7 +378,7 @@ async function ensureAppReady() {
     });
   }
 
-  return appBootPromise;
+  return proxyReadyPromise;
 }
 
 async function navigate(inputValue, engineTemplate = getEngineById(selectedEngineId).template) {
@@ -331,7 +386,7 @@ async function navigate(inputValue, engineTemplate = getEngineById(selectedEngin
   const t0 = performance.now();
   const target = normalizeInput(inputValue, engineTemplate);
 
-  await ensureAppReady();
+  await ensureProxyReady();
   if (token !== navToken) return;
 
   const scramjet = await getScramjet();
@@ -340,22 +395,10 @@ async function navigate(inputValue, engineTemplate = getEngineById(selectedEngin
   }
 
   scramjetFrame.go(target);
-  const proxiedUrl = scramjetFrame.frame.src;
-  proxyFrame.src = proxiedUrl;
+  proxyFrame.src = scramjetFrame.frame.src;
   addressInput.value = target;
+  syncSpotlightState();
   devLog(`[perf] Navigation ${(performance.now() - t0).toFixed(1)}ms`, target);
-}
-
-function setSpotlightOpen(open, focusInput = false) {
-  isSpotlightOpen = open;
-  spotlightShell.classList.toggle("is-open", open);
-  toggleArrow.textContent = open ? "↑" : "↓";
-  spotlightToggle.setAttribute("aria-expanded", String(open));
-
-  if (open && focusInput) {
-    addressInput.focus({ preventScroll: true });
-    addressInput.select();
-  }
 }
 
 function moveChipFocus(step) {
@@ -366,67 +409,108 @@ function moveChipFocus(step) {
   chips[chipFocusIndex].focus();
 }
 
+function shouldHandleVerticalArrow(event) {
+  const caret = addressInput.selectionStart ?? 0;
+  const selectionEnd = addressInput.selectionEnd ?? 0;
+  const valueLength = addressInput.value.length;
+  const hasSelection = selectionEnd !== caret;
+  if (event.metaKey || event.ctrlKey || event.altKey || hasSelection) return true;
+  if (valueLength === 0) return true;
+  return caret === 0 || caret === valueLength;
+}
+
 function handleGlobalKeys(event) {
   const cmdOrCtrl = event.metaKey || event.ctrlKey;
   if (cmdOrCtrl && event.key.toLowerCase() === "l") {
     event.preventDefault();
-    setSpotlightOpen(true, true);
+    openSpotlight({ focus: true });
+    addressInput.select();
     return;
   }
 
-  const isInputFocused = document.activeElement === addressInput;
   if (event.key === "ArrowDown") {
-    if (!isInputFocused || addressInput.value.trim() === "") {
+    const isInputFocused = document.activeElement === addressInput;
+    if (!isInputFocused || !isOpen || shouldHandleVerticalArrow(event)) {
       event.preventDefault();
-      setSpotlightOpen(true, true);
+      openSpotlight({ focus: true });
     }
     return;
   }
 
   if (event.key === "ArrowUp") {
-    if (!isInputFocused || addressInput.value.trim() === "") {
+    const isInputFocused = document.activeElement === addressInput;
+    if (!isInputFocused || !isOpen || !addressInput.value.trim() || shouldHandleVerticalArrow(event)) {
       event.preventDefault();
-      setSpotlightOpen(false, false);
+      closeSpotlight({ force: true });
     }
     return;
   }
 
   if (event.key === "Escape") {
     if (document.activeElement === addressInput && addressInput.value.trim()) {
-      addressInput.blur();
+      addressInput.value = "";
+      syncSpotlightState();
       return;
     }
 
-    if (document.activeElement === addressInput || isSpotlightOpen) {
-      setSpotlightOpen(false, false);
-      addressInput.blur();
-    }
+    closeSpotlight({ force: true });
   }
 }
 
+function onMouseMove(event) {
+  if (revealRaf) return;
+  revealRaf = requestAnimationFrame(() => {
+    revealRaf = 0;
+    if (event.clientY <= 72 && spotlightShell.classList.contains("is-hidden")) {
+      spotlightShell.classList.remove("is-hidden");
+    }
+  });
+}
+
 function bindEvents() {
+  if (didBindEvents) return;
+  didBindEvents = true;
+
   spotlightToggle.addEventListener("click", () => {
-    setSpotlightOpen(!isSpotlightOpen, isSpotlightOpen === false);
+    if (isOpen || isFocused || hasValue) {
+      closeSpotlight({ force: true });
+      spotlightShell.classList.toggle("is-hidden", !hasValue);
+      return;
+    }
+
+    spotlightShell.classList.remove("is-hidden");
+    openSpotlight({ focus: true });
   });
 
   navForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     try {
       await navigate(addressInput.value);
-      setSpotlightOpen(false, false);
+      closeSpotlight();
     } catch (error) {
       console.error(error);
       addressInput.placeholder = "Unable to start proxy.";
-      setSpotlightOpen(true, true);
+      openSpotlight({ focus: true });
     }
   });
 
   addressInput.addEventListener("focus", () => {
-    setSpotlightOpen(true, false);
+    setFocusedState(true);
+    openSpotlight({ focus: false });
+  });
+
+  addressInput.addEventListener("blur", () => {
+    setFocusedState(false);
+    scheduleCollapse();
+  });
+
+  addressInput.addEventListener("input", () => {
+    openSpotlight({ focus: false });
+    syncSpotlightState();
   });
 
   addressInput.addEventListener("keydown", (event) => {
-    if (event.key === "Tab" && !event.shiftKey) {
+    if (event.key === "Tab" && !event.shiftKey && isOpen) {
       event.preventDefault();
       moveChipFocus(1);
       return;
@@ -437,12 +521,15 @@ function bindEvents() {
     }
   });
 
+  clearInput.addEventListener("click", () => {
+    addressInput.value = "";
+    syncSpotlightState();
+    openSpotlight({ focus: true });
+  });
+
   toggleCustomEditorBtn.addEventListener("click", () => {
-    if (customEngineEditor.hidden) {
-      openCustomEditor();
-    } else {
-      closeCustomEditor();
-    }
+    if (customEngineEditor.hidden) openCustomEditor();
+    else closeCustomEditor();
   });
 
   cancelCustomEditorBtn.addEventListener("click", () => closeCustomEditor());
@@ -476,7 +563,7 @@ function bindEvents() {
     try {
       resetPanel.hidden = true;
       resetInitState();
-      await ensureAppReady();
+      await ensureProxyReady();
     } catch (error) {
       console.error(error);
       resetPanel.hidden = false;
@@ -492,6 +579,7 @@ function bindEvents() {
   });
 
   window.addEventListener("keydown", handleGlobalKeys, { passive: false });
+  window.addEventListener("mousemove", onMouseMove, { passive: true });
 }
 
 async function boot() {
@@ -499,9 +587,10 @@ async function boot() {
   selectedEngineId = getEngineById(engineState.defaultEngineId).id;
   renderEngineChips();
   bindEvents();
+  closeSpotlight({ force: true });
 
   try {
-    await ensureAppReady();
+    await ensureProxyReady();
   } catch (error) {
     console.error("Startup failed.", error);
     resetPanel.hidden = false;
