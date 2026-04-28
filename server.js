@@ -66,9 +66,52 @@ app.get("/client.js", (_req, res) => {
   res.sendFile(join(__dirname, "public", "client.js"));
 });
 
+app.get("/style.css", (_req, res) => {
+  setNoStoreHeaders(res);
+  res.sendFile(join(__dirname, "public", "style.css"));
+});
+
 app.get("/sw.js", (_req, res) => {
   setNoStoreHeaders(res);
   res.sendFile(join(__dirname, "public", "sw.js"));
+});
+
+app.get(["/", "/index.html"], (_req, res) => {
+  setNoStoreHeaders(res);
+  res.sendFile(join(__dirname, "public", "index.html"));
+});
+
+app.get("/debug-ui", (_req, res) => {
+  setNoStoreHeaders(res);
+  res.type("html").send(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nexus Proxy UI Debug</title>
+    <link rel="stylesheet" href="/style.css?v=scramjet-10" />
+  </head>
+  <body>
+    <div id="spotlightShell" class="spotlight-shell is-open" data-debug-visible="true">
+      <form id="searchForm" class="spotlight-panel" autocomplete="off">
+        <div class="spotlight-input-row">
+          <span class="spotlight-icon" aria-hidden="true">⌕</span>
+          <input
+            id="urlInput"
+            class="spotlight-input"
+            type="text"
+            placeholder="Spotlight Search"
+            spellcheck="false"
+            autocomplete="off"
+            aria-label="Search or enter URL"
+          />
+          <button id="clearInput" class="spotlight-clear" type="button" aria-label="Clear search">×</button>
+        </div>
+        <div id="engineRow" class="engine-row" aria-label="Search engines"></div>
+      </form>
+    </div>
+  </body>
+</html>`);
 });
 
 app.get("/reset", (_req, res) => {
@@ -192,7 +235,7 @@ app.use(SCRAMJET_ROUTE, express.static(scramjetPath, { maxAge: 0 }));
 app.use(
   express.static(join(__dirname, "public"), {
     extensions: ["html"],
-    maxAge: "1h"
+    maxAge: 0
   })
 );
 
@@ -212,6 +255,7 @@ app.use((err, req, res, _next) => {
 
 app.use((req, res) => {
   if (req.method === "GET") {
+    setNoStoreHeaders(res);
     return res.sendFile(join(__dirname, "public", "index.html"));
   }
   return res.status(404).json({ error: "Not found" });

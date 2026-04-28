@@ -1,4 +1,4 @@
-const ASSET_VERSION = "scramjet-9";
+const ASSET_VERSION = "scramjet-10";
 const DEV = self.location.hostname === "localhost" || self.location.hostname === "127.0.0.1";
 
 importScripts(`/scram/scramjet.all.js?v=${ASSET_VERSION}`);
@@ -10,6 +10,7 @@ const bypassSameOrigin = new Set([
   "/",
   "/reset",
   "/health",
+  "/debug-ui",
   "/client.js",
   "/style.css",
   "/favicon.ico",
