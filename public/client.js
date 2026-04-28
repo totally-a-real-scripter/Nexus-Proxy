@@ -1,9 +1,7 @@
 const WISP_PATH = "/wisp/";
-const ASSET_VERSION = "scramjet-1";
-
-if ("__uv$config" in window) {
-  console.warn("Old Ultraviolet config still exists. Check stale cache or old files.");
-}
+const ASSET_VERSION = "scramjet-2";
+const SCRAMJET_DB_NAMES = ["$scramjet"];
+const SCRAMJET_STORAGE_KEYS = ["scramjet", "$scramjet"];
 
 if (typeof window.$scramjetLoadController !== "function") {
   throw new Error("Scramjet controller is unavailable. Check /scram/scramjet.all.js.");
@@ -18,6 +16,7 @@ let swReadyPromise;
 let transportReadyPromise;
 let scramjetReadyPromise;
 let scramjetFrame;
+let appBootPromise;
 let hasNavigated = false;
 let lastScrollY = 0;
 let hideTimer;
@@ -37,6 +36,99 @@ function normalizeInput(raw) {
   }
 
   return `https://www.google.com/search?q=${encodeURIComponent(value)}`;
+}
+
+async function deleteDatabase(name) {
+  if (!("indexedDB" in window)) return false;
+
+  return new Promise((resolve) => {
+    const request = indexedDB.deleteDatabase(name);
+    request.onsuccess = () => resolve(true);
+    request.onerror = () => resolve(false);
+    request.onblocked = () => resolve(false);
+  });
+}
+
+function clearScramjetStorageKeys() {
+  for (const key of SCRAMJET_STORAGE_KEYS) {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+  }
+}
+
+async function resetScramjetStorage() {
+  for (const name of SCRAMJET_DB_NAMES) {
+    await deleteDatabase(name);
+  }
+
+  clearScramjetStorageKeys();
+}
+
+async function hardResetProxyStorage() {
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  for (const registration of registrations) {
+    await registration.unregister();
+  }
+
+  await resetScramjetStorage();
+
+  if ("caches" in window) {
+    const names = await caches.keys();
+    await Promise.all(names.map((name) => caches.delete(name)));
+  }
+
+  location.href = `/?reset=${Date.now()}`;
+}
+
+function showResetProxyError(error) {
+  console.error("Scramjet initialization failed after recovery.", error);
+
+  const existing = document.getElementById("proxyErrorBanner");
+  if (existing) return;
+
+  const banner = document.createElement("div");
+  banner.id = "proxyErrorBanner";
+  banner.style.cssText = [
+    "position:fixed",
+    "right:16px",
+    "bottom:16px",
+    "z-index:9999",
+    "background:#16181dcc",
+    "backdrop-filter:blur(8px)",
+    "border:1px solid #3a3f4b",
+    "border-radius:12px",
+    "padding:12px",
+    "max-width:360px",
+    "color:#e8ecf2",
+    "font-family:system-ui,sans-serif",
+    "box-shadow:0 10px 30px rgba(0,0,0,.35)"
+  ].join(";");
+
+  banner.innerHTML = `
+    <strong style="display:block;margin-bottom:6px;">Proxy storage error</strong>
+    <p style="margin:0 0 10px 0;font-size:14px;line-height:1.4;">Scramjet storage appears stale or corrupted. Reset proxy storage and reload.</p>
+    <button id="resetProxyStorageBtn" type="button" style="background:#5a9cff;color:#04121f;border:0;border-radius:8px;padding:8px 12px;font-weight:600;cursor:pointer;">Reset proxy storage</button>
+  `;
+
+  document.body.appendChild(banner);
+
+  document.getElementById("resetProxyStorageBtn")?.addEventListener("click", async () => {
+    const btn = document.getElementById("resetProxyStorageBtn");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Resetting...";
+    }
+
+    try {
+      await hardResetProxyStorage();
+    } catch (resetError) {
+      console.error("Hard reset failed.", resetError);
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "Reset failed (retry)";
+      }
+    }
+  });
 }
 
 async function ensureTransport() {
@@ -101,12 +193,54 @@ async function getScramjet() {
   return scramjetReadyPromise;
 }
 
+function resetInitState() {
+  swReadyPromise = undefined;
+  transportReadyPromise = undefined;
+  scramjetReadyPromise = undefined;
+  window.__scramjetInstance = undefined;
+  scramjetFrame = undefined;
+}
+
+async function initScramjet() {
+  await getScramjet();
+  await ensureTransport();
+  await ensureServiceWorker();
+}
+
+async function initScramjetWithRecovery() {
+  try {
+    await initScramjet();
+  } catch (error) {
+    console.error("Scramjet init failed. Resetting Scramjet storage and retrying once.", error);
+
+    await resetScramjetStorage();
+
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    for (const registration of registrations) {
+      await registration.unregister();
+    }
+
+    resetInitState();
+    await initScramjet();
+  }
+}
+
+async function ensureAppReady() {
+  if (!appBootPromise) {
+    appBootPromise = initScramjetWithRecovery().catch((error) => {
+      showResetProxyError(error);
+      throw error;
+    });
+  }
+
+  return appBootPromise;
+}
+
 async function navigate(inputValue) {
   const target = normalizeInput(inputValue);
   if (!target) return;
 
-  await ensureTransport();
-  await ensureServiceWorker();
+  await ensureAppReady();
 
   const scramjet = await getScramjet();
   if (!scramjetFrame) {
@@ -206,4 +340,8 @@ window.addEventListener("mousemove", (event) => {
 window.addEventListener("load", () => {
   centeredOmnibar();
   focusAddressBar(false);
+
+  ensureAppReady().catch(() => {
+    addressInput.placeholder = "Proxy initialization failed. Use Reset proxy storage.";
+  });
 });
