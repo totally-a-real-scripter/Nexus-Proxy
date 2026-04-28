@@ -19,8 +19,8 @@ const HOST = "0.0.0.0";
 const PORT = Number.parseInt(process.env.PORT || "9876", 10) || 9876;
 const WISP_ENDPOINT = "/wisp/";
 const SCRAMJET_ROUTE = "/scram/";
-const SCRAMJET_DB_NAMES = ["$scramjet"];
-const SCRAMJET_STORAGE_KEYS = ["scramjet", "$scramjet"];
+const SCRAMJET_DB_NAMES = ["$scramjet", "bare-mux"];
+const SCRAMJET_STORAGE_KEYS = ["scramjet", "$scramjet", "bare-mux-path", "baremux"];
 
 const app = express();
 app.set("trust proxy", 1);
@@ -129,18 +129,22 @@ app.get(WISP_ENDPOINT, (_req, res) => {
   });
 });
 
-app.use(
-  SCRAMJET_ROUTE,
-  express.static(scramjetPath, {
-    maxAge: "1d",
-    setHeaders: (res, filePath) => {
-      const basename = filePath.split("/").pop() || "";
-      if (basename.startsWith("scramjet")) {
-        setNoStoreHeaders(res);
-      }
-    }
-  })
-);
+app.use("/baremux/", (_req, res, next) => {
+  setNoStoreHeaders(res);
+  next();
+});
+
+app.use("/epoxy/", (_req, res, next) => {
+  setNoStoreHeaders(res);
+  next();
+});
+
+app.use("/scram/", (_req, res, next) => {
+  setNoStoreHeaders(res);
+  next();
+});
+
+app.use(SCRAMJET_ROUTE, express.static(scramjetPath, { maxAge: 0 }));
 
 app.use(
   express.static(join(__dirname, "public"), {
@@ -149,8 +153,8 @@ app.use(
   })
 );
 
-app.use("/baremux/", express.static(baremuxPath, { maxAge: "1d" }));
-app.use("/epoxy/", express.static(epoxyPath, { maxAge: "1d" }));
+app.use("/baremux/", express.static(baremuxPath, { maxAge: 0 }));
+app.use("/epoxy/", express.static(epoxyPath, { maxAge: 0 }));
 
 app.use((err, req, res, _next) => {
   console.error("[express:error]", {
@@ -196,7 +200,11 @@ server.listen(PORT, HOST, () => {
   console.log(`Host        : ${HOST}`);
   console.log(`Port        : ${PORT}`);
   console.log(`Scramjet    : ${SCRAMJET_ROUTE}`);
+  console.log(`BareMux     : /baremux/ (exists=${existsSync(baremuxPath)}) path=${baremuxPath}`);
+  console.log(`Epoxy       : /epoxy/ (exists=${existsSync(epoxyPath)}) path=${epoxyPath}`);
+  console.log(`Scram Path  : exists=${existsSync(scramjetPath)} path=${scramjetPath}`);
   console.log(`Wisp WS     : ${WISP_ENDPOINT}`);
+  console.log(`Wisp Upgrade: enabled=true`);
   console.log(`Local URL   : http://localhost:${PORT}`);
   console.log(`Host URL    : http://${hostname()}:${PORT}`);
   for (const filename of scramjetSanityFiles) {
