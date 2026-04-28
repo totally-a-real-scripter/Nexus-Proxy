@@ -1,4 +1,13 @@
 const WISP_PATH = "/wisp/";
+const ASSET_VERSION = "scramjet-1";
+
+if ("__uv$config" in window) {
+  console.warn("Old Ultraviolet config still exists. Check stale cache or old files.");
+}
+
+if (typeof window.$scramjetLoadController !== "function") {
+  throw new Error("Scramjet controller is unavailable. Check /scram/scramjet.all.js.");
+}
 
 const omnibarWrap = document.getElementById("omnibarWrap");
 const navForm = document.getElementById("navForm");
@@ -8,6 +17,7 @@ const proxyFrame = document.getElementById("proxyFrame");
 let swReadyPromise;
 let transportReadyPromise;
 let scramjetReadyPromise;
+let scramjetFrame;
 let hasNavigated = false;
 let lastScrollY = 0;
 let hideTimer;
@@ -57,7 +67,7 @@ async function ensureServiceWorker() {
       throw new Error("Service workers are not supported in this browser.");
     }
 
-    const registration = await navigator.serviceWorker.register("/sw.js", {
+    const registration = await navigator.serviceWorker.register(`/sw.js?v=${ASSET_VERSION}`, {
       scope: "/",
       updateViaCache: "none"
     });
@@ -70,19 +80,10 @@ async function ensureServiceWorker() {
 }
 
 async function getScramjet() {
-  if (window.__scramjetInstance) {
-    return window.__scramjetInstance;
-  }
-
-  if (scramjetReadyPromise) {
-    return scramjetReadyPromise;
-  }
+  if (window.__scramjetInstance) return window.__scramjetInstance;
+  if (scramjetReadyPromise) return scramjetReadyPromise;
 
   scramjetReadyPromise = (async () => {
-    if (typeof window.$scramjetLoadController !== "function") {
-      throw new Error("Scramjet controller bundle is unavailable. Check /scram/scramjet.all.js.");
-    }
-
     const { ScramjetController } = window.$scramjetLoadController();
     const scramjet = new ScramjetController({
       files: {
@@ -94,16 +95,31 @@ async function getScramjet() {
 
     await scramjet.init();
     window.__scramjetInstance = scramjet;
-
     return scramjet;
   })();
 
   return scramjetReadyPromise;
 }
 
-async function encodeScramjetUrl(url) {
+async function navigate(inputValue) {
+  const target = normalizeInput(inputValue);
+  if (!target) return;
+
+  await ensureTransport();
+  await ensureServiceWorker();
+
   const scramjet = await getScramjet();
-  return scramjet.encodeUrl(url);
+  if (!scramjetFrame) {
+    scramjetFrame = scramjet.createFrame(proxyFrame);
+  }
+
+  scramjetFrame.go(target);
+  const proxiedUrl = scramjetFrame.frame.src;
+  proxyFrame.src = proxiedUrl;
+  addressInput.value = target;
+
+  hasNavigated = true;
+  compactOmnibar();
 }
 
 function focusAddressBar(selectAll = true) {
@@ -129,21 +145,6 @@ function compactOmnibar() {
 function centeredOmnibar() {
   omnibarWrap.classList.add("is-centered", "is-visible");
   omnibarWrap.classList.remove("is-compact");
-}
-
-async function navigate(inputValue) {
-  const target = normalizeInput(inputValue);
-  if (!target) return;
-
-  await ensureTransport();
-  await ensureServiceWorker();
-
-  const proxied = await encodeScramjetUrl(target);
-  proxyFrame.src = proxied;
-  addressInput.value = target;
-
-  hasNavigated = true;
-  compactOmnibar();
 }
 
 navForm.addEventListener("submit", async (event) => {

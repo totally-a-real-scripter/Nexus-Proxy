@@ -5,6 +5,7 @@ import { hostname } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { existsSync } from "node:fs";
 import { baremuxPath } from "@mercuryworkshop/bare-mux/node";
 import { scramjetPath } from "@mercuryworkshop/scramjet/path";
 import { server as wisp } from "@mercuryworkshop/wisp-js/server";
@@ -42,6 +43,11 @@ const setNoStoreHeaders = (res) => {
   res.setHeader("Surrogate-Control", "no-store");
 };
 
+app.get("/client.js", (_req, res) => {
+  setNoStoreHeaders(res);
+  res.sendFile(join(__dirname, "public", "client.js"));
+});
+
 app.get("/sw.js", (_req, res) => {
   setNoStoreHeaders(res);
   res.sendFile(join(__dirname, "public", "sw.js"));
@@ -55,13 +61,6 @@ app.get(WISP_ENDPOINT, (_req, res) => {
 });
 
 app.use(
-  express.static(join(__dirname, "public"), {
-    extensions: ["html"],
-    maxAge: "1h"
-  })
-);
-
-app.use(
   SCRAMJET_ROUTE,
   express.static(scramjetPath, {
     maxAge: "1d",
@@ -73,6 +72,14 @@ app.use(
     }
   })
 );
+
+app.use(
+  express.static(join(__dirname, "public"), {
+    extensions: ["html"],
+    maxAge: "1h"
+  })
+);
+
 app.use("/baremux/", express.static(baremuxPath, { maxAge: "1d" }));
 app.use("/epoxy/", express.static(epoxyPath, { maxAge: "1d" }));
 
@@ -111,6 +118,8 @@ server.on("upgrade", (req, socket, head) => {
   socket.destroy();
 });
 
+const scramjetSanityFiles = ["scramjet.all.js", "scramjet.sync.js", "scramjet.wasm.wasm"];
+
 server.listen(PORT, HOST, () => {
   console.log("======================================");
   console.log("Nexus Proxy started");
@@ -121,6 +130,10 @@ server.listen(PORT, HOST, () => {
   console.log(`Wisp WS     : ${WISP_ENDPOINT}`);
   console.log(`Local URL   : http://localhost:${PORT}`);
   console.log(`Host URL    : http://${hostname()}:${PORT}`);
+  for (const filename of scramjetSanityFiles) {
+    const fullPath = join(scramjetPath, filename);
+    console.log(`[sanity] ${filename} exists=${existsSync(fullPath)} path=${fullPath}`);
+  }
   console.log("======================================");
 });
 
