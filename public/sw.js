@@ -1,4 +1,5 @@
-importScripts("/scram/scramjet.all.js");
+const ASSET_VERSION = "scramjet-3";
+importScripts(`/scram/scramjet.all.js?v=${ASSET_VERSION}`);
 
 const { ScramjetServiceWorker } = $scramjetLoadWorker();
 const scramjet = new ScramjetServiceWorker();
@@ -20,6 +21,19 @@ async function ensureConfig() {
   return configReadyPromise;
 }
 
+function storageErrorResponse() {
+  return new Response(
+    "<!doctype html><title>Proxy Error</title><h1>Proxy storage error</h1><p>Scramjet storage is stale or corrupted. Open <a href='/reset' target='_top'>Reset proxy storage</a> to clear proxy storage, then reload.</p>",
+    {
+      status: 500,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store"
+      }
+    }
+  );
+}
+
 self.addEventListener("install", () => {
   console.info("[sw] install");
   self.skipWaiting();
@@ -33,6 +47,21 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   event.respondWith(
     (async () => {
+      const url = new URL(event.request.url);
+
+      if (
+        url.origin === location.origin &&
+        (url.pathname === "/reset" ||
+          url.pathname === "/health" ||
+          url.pathname.startsWith("/scram/") ||
+          url.pathname.startsWith("/baremux/") ||
+          url.pathname.startsWith("/epoxy/") ||
+          url.pathname === "/client.js" ||
+          url.pathname === "/style.css")
+      ) {
+        return fetch(event.request);
+      }
+
       try {
         await ensureConfig();
 
@@ -45,16 +74,7 @@ self.addEventListener("fetch", (event) => {
         console.error("Scramjet fetch handler failed:", error);
 
         if (event.request.mode === "navigate") {
-          return new Response(
-            "<!doctype html><title>Proxy Error</title><h1>Proxy storage error</h1><p>Scramjet storage is stale or corrupted. Open <a href='/reset'>/reset</a> to clear proxy storage, then reload.</p>",
-            {
-              status: 500,
-              headers: {
-                "Content-Type": "text/html; charset=utf-8",
-                "Cache-Control": "no-store"
-              }
-            }
-          );
+          return storageErrorResponse();
         }
 
         try {

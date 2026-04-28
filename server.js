@@ -19,8 +19,24 @@ const HOST = "0.0.0.0";
 const PORT = Number.parseInt(process.env.PORT || "9876", 10) || 9876;
 const WISP_ENDPOINT = "/wisp/";
 const SCRAMJET_ROUTE = "/scram/";
-const SCRAMJET_DB_NAMES = ["$scramjet", "bare-mux"];
-const SCRAMJET_STORAGE_KEYS = ["scramjet", "$scramjet", "bare-mux-path", "baremux"];
+const RESET_DB_NAMES = [
+  "$scramjet",
+  "scramjet",
+  "Scramjet",
+  "scramjet-config",
+  "scramjet-store",
+  "scramjet_db",
+  "scramjet-db",
+  "$bare-mux",
+  "bare-mux",
+  "baremux",
+  "BareMux",
+  "epoxy",
+  "Epoxy",
+  "proxy-transports",
+  "proxyTransport",
+  "proxy-transport"
+];
 
 const app = express();
 app.set("trust proxy", 1);
@@ -70,53 +86,80 @@ app.get("/reset", (_req, res) => {
   </head>
   <body>
     <h1>Resetting proxy storage...</h1>
-    <p id="status">Please wait.</p>
+    <p>Please wait while we clear proxy storage and service workers.</p>
+    <pre id="status">Starting reset…</pre>
     <script>
-      const dbNames = ${JSON.stringify(SCRAMJET_DB_NAMES)};
-      const storageKeys = ${JSON.stringify(SCRAMJET_STORAGE_KEYS)};
-
-      async function deleteDatabase(name) {
-        if (!("indexedDB" in window)) return false;
+      const status = document.getElementById("status");
+      const deleteDb = (name) => {
+        if (!name || !("indexedDB" in window)) return Promise.resolve(false);
         return new Promise((resolve) => {
           const request = indexedDB.deleteDatabase(name);
           request.onsuccess = () => resolve(true);
           request.onerror = () => resolve(false);
           request.onblocked = () => resolve(false);
         });
-      }
+      };
 
       async function resetAll() {
-        const status = document.getElementById("status");
+        const logs = [];
+        const dbNames = new Set(${JSON.stringify(RESET_DB_NAMES)});
 
-        try {
+        if ("serviceWorker" in navigator) {
           const registrations = await navigator.serviceWorker.getRegistrations();
           for (const registration of registrations) {
             await registration.unregister();
+            logs.push("Unregistered service worker: " + (registration.scope || "unknown"));
           }
-
-          if ("caches" in window) {
-            const cacheNames = await caches.keys();
-            await Promise.all(cacheNames.map((name) => caches.delete(name)));
-          }
-
-          for (const name of dbNames) {
-            await deleteDatabase(name);
-          }
-
-          for (const key of storageKeys) {
-            localStorage.removeItem(key);
-            sessionStorage.removeItem(key);
-          }
-
-          status.textContent = "Done. Redirecting...";
-          location.replace("/?reset=" + Date.now());
-        } catch (error) {
-          console.error(error);
-          status.textContent = "Reset failed. Clear site data manually, then reload /.";
         }
+
+        if ("caches" in window) {
+          const cacheNames = await caches.keys();
+          for (const name of cacheNames) {
+            const deleted = await caches.delete(name);
+            logs.push("Deleted cache " + name + ": " + deleted);
+          }
+        }
+
+        if ("indexedDB" in window && typeof indexedDB.databases === "function") {
+          try {
+            const databases = await indexedDB.databases();
+            for (const db of databases) {
+              if (db.name && /scram|bare|mux|epoxy|proxy|transport/i.test(db.name)) {
+                dbNames.add(db.name);
+              }
+            }
+          } catch (error) {
+            logs.push("Unable to enumerate databases: " + String(error));
+          }
+        }
+
+        for (const name of dbNames) {
+          const deleted = await deleteDb(name);
+          logs.push("Tried deleting IndexedDB " + name + ": " + deleted);
+        }
+
+        try {
+          localStorage.clear();
+          logs.push("Cleared localStorage");
+        } catch (error) {
+          logs.push("localStorage clear failed: " + String(error));
+        }
+
+        try {
+          sessionStorage.clear();
+          logs.push("Cleared sessionStorage");
+        } catch (error) {
+          logs.push("sessionStorage clear failed: " + String(error));
+        }
+
+        status.textContent = "Proxy storage reset complete\\n\\n" + logs.join("\\n") + "\\n\\nReloading…";
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+        location.replace("/?reset=" + Date.now());
       }
 
-      resetAll();
+      resetAll().catch((error) => {
+        status.textContent = "Reset failed\\n\\n" + String(error && (error.stack || error));
+      });
     </script>
   </body>
 </html>`);
