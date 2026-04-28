@@ -1,4 +1,3 @@
-const PROXY_PREFIX = "/service/";
 const WISP_PATH = "/wisp/";
 
 const omnibarWrap = document.getElementById("omnibarWrap");
@@ -63,24 +62,29 @@ async function ensureServiceWorker() {
       updateViaCache: "none"
     });
 
-    await navigator.serviceWorker.ready;
     await registration.update();
+    await navigator.serviceWorker.ready;
   })();
 
   return swReadyPromise;
 }
 
-async function ensureScramjetController() {
-  if (scramjetReadyPromise) return scramjetReadyPromise;
+async function getScramjet() {
+  if (window.__scramjetInstance) {
+    return window.__scramjetInstance;
+  }
+
+  if (scramjetReadyPromise) {
+    return scramjetReadyPromise;
+  }
 
   scramjetReadyPromise = (async () => {
     if (typeof window.$scramjetLoadController !== "function") {
-      throw new Error("Scramjet bundle did not load.");
+      throw new Error("Scramjet controller bundle is unavailable. Check /scram/scramjet.all.js.");
     }
 
     const { ScramjetController } = window.$scramjetLoadController();
-    const controller = new ScramjetController({
-      prefix: PROXY_PREFIX,
+    const scramjet = new ScramjetController({
       files: {
         wasm: "/scram/scramjet.wasm.wasm",
         all: "/scram/scramjet.all.js",
@@ -88,11 +92,18 @@ async function ensureScramjetController() {
       }
     });
 
-    await controller.init();
-    return controller;
+    await scramjet.init();
+    window.__scramjetInstance = scramjet;
+
+    return scramjet;
   })();
 
   return scramjetReadyPromise;
+}
+
+async function encodeScramjetUrl(url) {
+  const scramjet = await getScramjet();
+  return scramjet.encodeUrl(url);
 }
 
 function focusAddressBar(selectAll = true) {
@@ -124,10 +135,10 @@ async function navigate(inputValue) {
   const target = normalizeInput(inputValue);
   if (!target) return;
 
-  await Promise.all([ensureTransport(), ensureServiceWorker()]);
-  const scramjet = await ensureScramjetController();
+  await ensureTransport();
+  await ensureServiceWorker();
 
-  const proxied = scramjet.encodeUrl(target);
+  const proxied = await encodeScramjetUrl(target);
   proxyFrame.src = proxied;
   addressInput.value = target;
 

@@ -16,7 +16,6 @@ const epoxyPath = dirname(require.resolve("@mercuryworkshop/epoxy-transport"));
 
 const HOST = "0.0.0.0";
 const PORT = Number.parseInt(process.env.PORT || "9876", 10) || 9876;
-const PROXY_PREFIX = "/service/";
 const WISP_ENDPOINT = "/wisp/";
 const SCRAMJET_ROUTE = "/scram/";
 
@@ -67,7 +66,8 @@ app.use(
   express.static(scramjetPath, {
     maxAge: "1d",
     setHeaders: (res, filePath) => {
-      if (filePath.includes("scramjet") || filePath.endsWith(".wasm")) {
+      const basename = filePath.split("/").pop();
+      if (["scramjet.all.js", "scramjet.sync.js", "scramjet.wasm.wasm"].includes(basename || "")) {
         setNoStoreHeaders(res);
       }
     }
@@ -88,10 +88,6 @@ app.use((err, req, res, _next) => {
 });
 
 app.use((req, res) => {
-  if (req.path.startsWith("/uv/")) {
-    return res.status(404).json({ error: "Ultraviolet routes removed" });
-  }
-
   if (req.method === "GET") {
     return res.sendFile(join(__dirname, "public", "index.html"));
   }
@@ -121,7 +117,7 @@ server.listen(PORT, HOST, () => {
   console.log(`Environment : ${process.env.NODE_ENV || "development"}`);
   console.log(`Host        : ${HOST}`);
   console.log(`Port        : ${PORT}`);
-  console.log(`Scramjet    : ${SCRAMJET_ROUTE} (prefix ${PROXY_PREFIX})`);
+  console.log(`Scramjet    : ${SCRAMJET_ROUTE}`);
   console.log(`Wisp WS     : ${WISP_ENDPOINT}`);
   console.log(`Local URL   : http://localhost:${PORT}`);
   console.log(`Host URL    : http://${hostname()}:${PORT}`);
