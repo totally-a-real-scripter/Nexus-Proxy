@@ -1,5 +1,5 @@
 const WISP_PATH = "/wisp/";
-const ASSET_VERSION = "scramjet-12";
+const ASSET_VERSION = "scramjet-13";
 
 const SCRAMJET_DB_NAMES = ["$scramjet", "scramjet", "bare-mux", "baremux", "epoxy", "proxy-transports"];
 const SCRAMJET_STORAGE_KEYS = ["scramjet", "$scramjet", "bare-mux-path", "baremux"];
@@ -8,10 +8,10 @@ const spotlightShell = document.getElementById("spotlightShell");
 const searchForm = document.getElementById("searchForm");
 const urlInput = document.getElementById("urlInput");
 const proxyFrame = document.getElementById("proxyFrame");
-const spotlightToggle = document.getElementById("spotlightToggle");
-const spotlightPanel = document.getElementById("searchForm");
 const clearInput = document.getElementById("clearInput");
-const shortcutDock = document.getElementById("shortcutDock");
+const bottomBar = document.getElementById("bottomBar");
+const homeButton = document.getElementById("homeButton");
+const collapseButton = document.getElementById("collapseButton");
 const resetPanel = document.getElementById("resetPanel");
 const retryInitBtn = document.getElementById("retryInitBtn");
 const resetProxyStorageBtn = document.getElementById("resetProxyStorageBtn");
@@ -21,8 +21,10 @@ const requiredElements = {
   searchForm,
   urlInput,
   proxyFrame,
-  spotlightToggle,
-  clearInput
+  clearInput,
+  bottomBar,
+  homeButton,
+  collapseButton
 };
 
 for (const [name, element] of Object.entries(requiredElements)) {
@@ -271,31 +273,29 @@ function bindUIEvents() {
     expandSpotlight({ focus: true });
   });
 
-  spotlightPanel?.addEventListener("click", () => {
-    if (spotlightShell.classList.contains("is-condensed")) {
-      expandSpotlight({ focus: true });
-    }
+  homeButton?.addEventListener("click", () => {
+    hasLoadedContent = false;
+    proxyFrame.src = "/home.html";
+    urlInput.value = "";
+    syncSpotlightState();
+    expandSpotlight({ focus: true });
   });
 
-  spotlightToggle.addEventListener("click", () => {
-    if (spotlightShell.classList.contains("is-condensed")) {
-      expandSpotlight({ focus: true });
-      return;
-    }
-
-    const isOpen =
-      spotlightShell.classList.contains("is-open") ||
-      spotlightShell.classList.contains("is-focused") ||
-      spotlightShell.classList.contains("is-typing");
-
-    if (isOpen && !urlInput.value.trim() && hasLoadedContent) {
+  collapseButton?.addEventListener("click", () => {
+    if (hasLoadedContent) {
       condenseSpotlight();
-    } else if (isOpen && !urlInput.value.trim()) {
-      closeSpotlight({ force: true });
     } else {
-      expandSpotlight({ focus: true });
+      closeSpotlight({ force: true });
     }
   });
+
+  spotlightShell?.addEventListener("click", (event) => {
+    if (!spotlightShell.classList.contains("is-condensed")) return;
+
+    event.preventDefault();
+    expandSpotlight({ focus: true });
+  });
+
 
   searchForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -310,47 +310,6 @@ function bindUIEvents() {
     }
   });
 
-  shortcutDock?.addEventListener("click", async (event) => {
-    const button = event.target.closest("[data-action]");
-    if (!button) return;
-
-    const action = button.dataset.action;
-
-    if (action === "go") {
-      if (urlInput.value.trim()) {
-        try {
-          await navigate(urlInput.value);
-          hasLoadedContent = true;
-          condenseSpotlight();
-        } catch (error) {
-          console.error("[shortcut go] failed", error);
-          expandSpotlight({ focus: true });
-        }
-      }
-      return;
-    }
-
-    if (action === "focus") {
-      expandSpotlight({ focus: true });
-      return;
-    }
-
-    if (action === "close") {
-      if (urlInput.value.trim()) {
-        urlInput.value = "";
-        syncSpotlightState();
-      } else if (hasLoadedContent) {
-        condenseSpotlight();
-      } else {
-        closeSpotlight({ force: true });
-      }
-      return;
-    }
-
-    if (action === "hide") {
-      condenseSpotlight();
-    }
-  });
 
   document.addEventListener("keydown", (event) => {
     const isMac = navigator.platform.toLowerCase().includes("mac");
@@ -414,6 +373,8 @@ function bindUIEvents() {
 }
 
 function initUI() {
+  hasLoadedContent = false;
+  proxyFrame.src = "/home.html";
   spotlightShell.classList.remove("is-hidden");
   spotlightShell.classList.add("is-open");
   syncSpotlightState();

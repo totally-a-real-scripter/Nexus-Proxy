@@ -4,12 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Nexus Proxy</title>
-    <link rel="stylesheet" href="/style.css?v=scramjet-12" />
-    <script src="/baremux/index.js?v=scramjet-12"></script>
-    <script src="/epoxy/index.js?v=scramjet-12"></script>
+    <link rel="stylesheet" href="/style.css?v=scramjet-13" />
+    <script src="/baremux/index.js?v=scramjet-13"></script>
+    <script src="/epoxy/index.js?v=scramjet-13"></script>
   </head>
   <body>
-    <iframe id="proxyFrame" class="proxy-frame" title="Proxied content"></iframe>
+    <iframe id="proxyFrame" class="proxy-frame" title="Proxied content" src="/home.html"></iframe>
 
     <div id="spotlightShell" class="spotlight-shell is-open">
       <form id="searchForm" class="spotlight-panel" autocomplete="off">
@@ -38,18 +38,16 @@
           <button id="clearInput" class="spotlight-clear" type="button" aria-label="Clear search">×</button>
         </div>
       </form>
-
-      <div id="shortcutDock" class="shortcut-dock" aria-hidden="true">
-        <button class="shortcut-bubble" type="button" data-action="go" title="Go">⏎</button>
-        <button class="shortcut-bubble" type="button" data-action="focus" title="Focus">⌘L</button>
-        <button class="shortcut-bubble" type="button" data-action="close" title="Close">Esc</button>
-        <button class="shortcut-bubble" type="button" data-action="hide" title="Hide">↑</button>
-      </div>
-
-      <button id="spotlightToggle" class="spotlight-toggle" type="button" aria-label="Toggle search">
-        <span class="toggle-arrow">⌄</span>
-      </button>
     </div>
+
+    <nav id="bottomBar" class="bottom-bar" aria-label="Browser controls">
+      <button id="homeButton" class="bottom-bar-button" type="button" aria-label="Home">
+        <span aria-hidden="true">⌂</span>
+      </button>
+      <button id="collapseButton" class="bottom-bar-button" type="button" aria-label="Collapse search">
+        <span aria-hidden="true">↑</span>
+      </button>
+    </nav>
 
     <section class="reset-panel" id="resetPanel" hidden>
       <h2>Proxy startup failed</h2>
@@ -60,7 +58,7 @@
       </div>
     </section>
 
-    <script src="/scram/scramjet.all.js?v=scramjet-12"></script>
-    <script src="/client.js?v=scramjet-12" defer></script>
+    <script src="/scram/scramjet.all.js?v=scramjet-13"></script>
+    <script src="/client.js?v=scramjet-13" defer></script>
   </body>
 </html>

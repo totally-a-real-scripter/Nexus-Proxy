@@ -89,7 +89,7 @@ app.get("/debug-ui", (_req, res) => {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Nexus Proxy UI Debug</title>
-    <link rel="stylesheet" href="/style.css?v=scramjet-12" />
+    <link rel="stylesheet" href="/style.css?v=scramjet-13" />
   </head>
   <body>
     <div id="spotlightShell" class="spotlight-shell is-open">
@@ -117,11 +117,12 @@ app.get("/debug-ui", (_req, res) => {
           <button id="clearInput" class="spotlight-clear" type="button" aria-label="Clear search">×</button>
         </div>
       </form>
-
-      <button id="spotlightToggle" class="spotlight-toggle" type="button" aria-label="Toggle search">
-        <span class="toggle-arrow">⌄</span>
-      </button>
     </div>
+
+    <nav id="bottomBar" class="bottom-bar" aria-label="Browser controls">
+      <button id="homeButton" class="bottom-bar-button" type="button" aria-label="Home"><span aria-hidden="true">⌂</span></button>
+      <button id="collapseButton" class="bottom-bar-button" type="button" aria-label="Collapse search"><span aria-hidden="true">↑</span></button>
+    </nav>
   </body>
 </html>`);
 });
