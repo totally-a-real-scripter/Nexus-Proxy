@@ -1,6 +1,6 @@
 # Nexus Proxy (Scramjet)
 
-A clean, minimalist proxy UI powered by **Scramjet + Bare-Mux + Epoxy + Wisp** with an Express server and Dockerfile-only deployment.
+A browser-style proxy UI powered by **Scramjet + Bare-Mux + Epoxy + Wisp** with Express and Dockerfile-only deployment.
 
 ## Stack
 
@@ -12,12 +12,13 @@ A clean, minimalist proxy UI powered by **Scramjet + Bare-Mux + Epoxy + Wisp** w
 
 ## Features
 
-- Single-page browser-style interface
-- Smart address/search parsing
-- Scramjet service worker interception
-- Bare-Mux + Epoxy transport over Wisp WebSocket
-- `/health` endpoint
-- Graceful shutdown (`SIGINT`, `SIGTERM`)
+- Full-screen proxy iframe with floating Spotlight-style search overlay
+- Toggle overlay with arrow button, `ArrowDown` (open), `ArrowUp` (hide), `Ctrl/Cmd+L` focus, `Esc` collapse/blur
+- Smart URL/search parsing
+- Built-in search engines (Google, YouTube, DuckDuckGo, GitHub, Reddit, Wikipedia)
+- User-defined custom search engines persisted in `localStorage` key `proxy.searchEngines.v1`
+- Scramjet service worker interception with bypass list for internal app assets
+- `/health` and `/reset` routes
 
 ## Environment
 
@@ -36,6 +37,8 @@ npm start
 Open: `http://localhost:9876`
 
 Health check: `http://localhost:9876/health`
+
+Reset proxy storage: `http://localhost:9876/reset`
 
 ## Docker (Coolify-friendly, Dockerfile only)
 

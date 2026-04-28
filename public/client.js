@@ -1,27 +1,181 @@
 const WISP_PATH = "/wisp/";
-const ASSET_VERSION = "scramjet-6";
+const ASSET_VERSION = "scramjet-7";
+const STORAGE_KEY = "proxy.searchEngines.v1";
+const DEV =
+  window.location.hostname === "localhost" ||
+  window.location.hostname === "127.0.0.1" ||
+  window.location.search.includes("debug=1");
+
 const SCRAMJET_DB_NAMES = ["$scramjet", "scramjet", "bare-mux", "baremux", "epoxy", "proxy-transports"];
 const SCRAMJET_STORAGE_KEYS = ["scramjet", "$scramjet", "bare-mux-path", "baremux"];
 
-const omnibarWrap = document.getElementById("omnibarWrap");
+const BUILTIN_ENGINES = [
+  { id: "google", name: "Google", template: "https://www.google.com/search?q={query}" },
+  { id: "youtube", name: "YouTube", template: "https://www.youtube.com/results?search_query={query}" },
+  { id: "duckduckgo", name: "DuckDuckGo", template: "https://duckduckgo.com/?q={query}" },
+  { id: "github", name: "GitHub", template: "https://github.com/search?q={query}" },
+  { id: "reddit", name: "Reddit", template: "https://www.reddit.com/search/?q={query}" },
+  { id: "wikipedia", name: "Wikipedia", template: "https://en.wikipedia.org/wiki/Special:Search?search={query}" }
+];
+
+const spotlightShell = document.getElementById("spotlightShell");
+const spotlightToggle = document.getElementById("spotlightToggle");
+const toggleArrow = document.getElementById("toggleArrow");
 const navForm = document.getElementById("navForm");
 const addressInput = document.getElementById("addressInput");
 const proxyFrame = document.getElementById("proxyFrame");
+const engineRow = document.getElementById("engineRow");
+const toggleCustomEditorBtn = document.getElementById("toggleCustomEditor");
+const customEngineEditor = document.getElementById("customEngineEditor");
+const customEngineName = document.getElementById("customEngineName");
+const customEngineTemplate = document.getElementById("customEngineTemplate");
+const customEditorError = document.getElementById("customEditorError");
+const cancelCustomEditorBtn = document.getElementById("cancelCustomEditor");
+const resetPanel = document.getElementById("resetPanel");
+const retryInitBtn = document.getElementById("retryInitBtn");
+const resetProxyStorageBtn = document.getElementById("resetProxyStorageBtn");
 
 let swReadyPromise;
 let transportReadyPromise;
 let scramjetReadyPromise;
-let scramjetFrame;
 let appBootPromise;
-let hasNavigated = false;
-let lastScrollY = 0;
-let hideTimer;
+let scramjetFrame;
+let isSpotlightOpen = true;
+let selectedEngineId = "google";
+let hasInitRetried = false;
+let navToken = 0;
+let chipFocusIndex = -1;
 
-function normalizeInput(raw) {
-  const value = raw.trim();
-  if (!value) {
-    throw new Error("Enter a URL or search query.");
+const engineState = {
+  defaultEngineId: "google",
+  custom: []
+};
+
+function devLog(...args) {
+  if (DEV) console.info(...args);
+}
+
+function parseEngineStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") {
+      if (typeof parsed.defaultEngineId === "string") engineState.defaultEngineId = parsed.defaultEngineId;
+      if (Array.isArray(parsed.custom)) {
+        engineState.custom = parsed.custom.filter(
+          (engine) =>
+            engine &&
+            typeof engine.id === "string" &&
+            typeof engine.name === "string" &&
+            typeof engine.template === "string"
+        );
+      }
+    }
+  } catch (error) {
+    console.warn("Unable to parse search engine storage.", error);
   }
+}
+
+function persistEngineState() {
+  try {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ defaultEngineId: engineState.defaultEngineId, custom: engineState.custom })
+    );
+  } catch (error) {
+    console.warn("Unable to save search engine settings.", error);
+  }
+}
+
+function getEngines() {
+  return [...BUILTIN_ENGINES, ...engineState.custom];
+}
+
+function getEngineById(id) {
+  return getEngines().find((engine) => engine.id === id) || BUILTIN_ENGINES[0];
+}
+
+function renderEngineChips() {
+  engineRow.textContent = "";
+  const engines = getEngines();
+
+  for (const engine of engines) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "engine-chip";
+    chip.dataset.engineId = engine.id;
+    chip.textContent = engine.name;
+
+    if (engine.id === selectedEngineId) {
+      chip.classList.add("active");
+      chip.setAttribute("aria-current", "true");
+    }
+
+    chip.addEventListener("click", () => {
+      selectedEngineId = engine.id;
+      engineState.defaultEngineId = engine.id;
+      persistEngineState();
+      renderEngineChips();
+      if (addressInput.value.trim()) {
+        void navigate(addressInput.value, engine.template);
+      }
+    });
+
+    if (engine.id.startsWith("custom-")) {
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.textContent = " ×";
+      removeBtn.setAttribute("aria-label", `Delete ${engine.name}`);
+      removeBtn.style.cssText = "margin-left:4px;border:0;background:none;color:inherit;cursor:pointer;";
+      removeBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        deleteCustomEngine(engine.id);
+      });
+      chip.appendChild(removeBtn);
+    }
+
+    engineRow.appendChild(chip);
+  }
+}
+
+function validateEngineInput(name, template) {
+  if (!name.trim()) return "Name is required.";
+  if (!template.startsWith("https://")) return "Template must start with https://.";
+  if (!template.includes("{query}")) return "Template must include {query}.";
+
+  const duplicate = getEngines().some((engine) => engine.name.toLowerCase() === name.trim().toLowerCase());
+  if (duplicate) return "Engine name already exists.";
+
+  return "";
+}
+
+function openCustomEditor() {
+  customEngineEditor.hidden = false;
+  customEditorError.textContent = "";
+  customEngineName.focus({ preventScroll: true });
+}
+
+function closeCustomEditor() {
+  customEngineEditor.hidden = true;
+  customEditorError.textContent = "";
+  customEngineName.value = "";
+  customEngineTemplate.value = "";
+}
+
+function deleteCustomEngine(engineId) {
+  engineState.custom = engineState.custom.filter((engine) => engine.id !== engineId);
+  if (selectedEngineId === engineId) {
+    selectedEngineId = "google";
+    engineState.defaultEngineId = "google";
+  }
+  persistEngineState();
+  renderEngineChips();
+}
+
+function normalizeInput(raw, engineTemplate) {
+  const value = raw.trim();
+  if (!value) throw new Error("Enter a URL or search query.");
 
   if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(value)) {
     return new URL(value).href;
@@ -31,12 +185,11 @@ function normalizeInput(raw) {
     return new URL(`https://${value}`).href;
   }
 
-  return `https://www.google.com/search?q=${encodeURIComponent(value)}`;
+  return engineTemplate.replace("{query}", encodeURIComponent(value));
 }
 
 async function deleteDatabase(name) {
   if (!("indexedDB" in window)) return false;
-
   return new Promise((resolve) => {
     const request = indexedDB.deleteDatabase(name);
     request.onsuccess = () => resolve(true);
@@ -56,7 +209,6 @@ async function resetScramjetStorage() {
   for (const name of SCRAMJET_DB_NAMES) {
     await deleteDatabase(name);
   }
-
   clearScramjetStorageKeys();
 }
 
@@ -73,80 +225,22 @@ async function hardResetProxyStorage() {
     await Promise.all(names.map((name) => caches.delete(name)));
   }
 
-  location.href = `/?reset=${Date.now()}`;
-}
-
-function showResetProxyError(error) {
-  console.error("Scramjet initialization failed after recovery.", error);
-
-  const existing = document.getElementById("proxyErrorBanner");
-  if (existing) return;
-
-  const banner = document.createElement("div");
-  banner.id = "proxyErrorBanner";
-  banner.style.cssText = [
-    "position:fixed",
-    "right:16px",
-    "bottom:16px",
-    "z-index:9999",
-    "background:#16181dcc",
-    "backdrop-filter:blur(8px)",
-    "border:1px solid #3a3f4b",
-    "border-radius:12px",
-    "padding:12px",
-    "max-width:360px",
-    "color:#e8ecf2",
-    "font-family:system-ui,sans-serif",
-    "box-shadow:0 10px 30px rgba(0,0,0,.35)"
-  ].join(";");
-
-  banner.innerHTML = `
-    <strong style="display:block;margin-bottom:6px;">Proxy startup failed</strong>
-    <p style="margin:0 0 10px 0;font-size:14px;line-height:1.4;">Proxy startup failed. Reset proxy storage.</p>
-    <button id="resetProxyStorageBtn" type="button" style="background:#5a9cff;color:#04121f;border:0;border-radius:8px;padding:8px 12px;font-weight:600;cursor:pointer;">Reset proxy storage</button>
-  `;
-
-  document.body.appendChild(banner);
-
-  document.getElementById("resetProxyStorageBtn")?.addEventListener("click", async () => {
-    const btn = document.getElementById("resetProxyStorageBtn");
-    if (btn) {
-      btn.disabled = true;
-      btn.textContent = "Resetting...";
-    }
-
-    try {
-      await hardResetProxyStorage();
-    } catch (resetError) {
-      console.error("Hard reset failed.", resetError);
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = "Reset failed (retry)";
-      }
-    }
-  });
+  window.location.href = `/reset?from=client&v=${ASSET_VERSION}`;
 }
 
 async function ensureTransport() {
   if (transportReadyPromise) return transportReadyPromise;
 
   transportReadyPromise = (async () => {
-    console.info("[proxy:init] BareMux global", !!window.BareMux);
-
     if (!window.BareMux?.BareMuxConnection) {
       throw new Error("BareMux runtime missing.");
     }
 
     const conn = new window.BareMux.BareMuxConnection(`/baremux/worker.js?v=${ASSET_VERSION}`);
     const wispUrl =
-      (window.location.protocol === "https:" ? "wss://" : "ws://") +
-      window.location.host +
-      WISP_PATH;
+      (window.location.protocol === "https:" ? "wss://" : "ws://") + window.location.host + WISP_PATH;
 
-    console.info("[proxy:init] Transport URL", `/epoxy/index.mjs?v=${ASSET_VERSION}`);
-    console.info("[proxy:init] Wisp URL", wispUrl);
     await conn.setTransport(`/epoxy/index.mjs?v=${ASSET_VERSION}`, [{ wisp: wispUrl }]);
-    console.info("[proxy:init] BareMux transport configured");
   })();
 
   return transportReadyPromise;
@@ -157,18 +251,15 @@ async function ensureServiceWorker() {
 
   swReadyPromise = (async () => {
     if (!("serviceWorker" in navigator)) {
-      throw new Error("Service workers are not supported in this browser.");
+      throw new Error("Service workers are not supported.");
     }
 
     const registration = await navigator.serviceWorker.register(`/sw.js?v=${ASSET_VERSION}`, {
       scope: "/",
       updateViaCache: "none"
     });
-    console.info("[proxy:init] Service worker registered", registration.scope);
-
     await registration.update();
     await navigator.serviceWorker.ready;
-    console.info("[proxy:init] Service worker ready");
   })();
 
   return swReadyPromise;
@@ -179,11 +270,11 @@ async function getScramjet() {
   if (scramjetReadyPromise) return scramjetReadyPromise;
 
   scramjetReadyPromise = (async () => {
-    console.info("[proxy:init] Scramjet global", typeof window.$scramjetLoadController === "function");
     if (typeof window.$scramjetLoadController !== "function") {
       throw new Error("Scramjet controller unavailable.");
     }
 
+    const t0 = performance.now();
     const { ScramjetController } = window.$scramjetLoadController();
     const scramjet = new ScramjetController({
       files: {
@@ -194,7 +285,7 @@ async function getScramjet() {
     });
 
     await scramjet.init();
-    console.info("[proxy:init] Scramjet init complete");
+    devLog(`[perf] Scramjet init ${(performance.now() - t0).toFixed(1)}ms`);
     window.__scramjetInstance = scramjet;
     return scramjet;
   })();
@@ -206,8 +297,9 @@ function resetInitState() {
   swReadyPromise = undefined;
   transportReadyPromise = undefined;
   scramjetReadyPromise = undefined;
-  window.__scramjetInstance = undefined;
+  appBootPromise = undefined;
   scramjetFrame = undefined;
+  window.__scramjetInstance = undefined;
 }
 
 async function initScramjet() {
@@ -216,40 +308,31 @@ async function initScramjet() {
   await ensureServiceWorker();
 }
 
-async function initScramjetWithRecovery() {
-  try {
-    await initScramjet();
-  } catch (error) {
-    console.error("Scramjet init failed. Resetting Scramjet storage and retrying once.", error);
-
-    await resetScramjetStorage();
-
-    const registrations = await navigator.serviceWorker.getRegistrations();
-    for (const registration of registrations) {
-      await registration.unregister();
-    }
-
-    resetInitState();
-    await initScramjet();
-  }
-}
-
 async function ensureAppReady() {
   if (!appBootPromise) {
-    appBootPromise = initScramjetWithRecovery().catch((error) => {
-      showResetProxyError(error);
-      throw error;
+    appBootPromise = initScramjet().catch(async (error) => {
+      if (hasInitRetried) throw error;
+      hasInitRetried = true;
+      await resetScramjetStorage();
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      for (const registration of registrations) {
+        await registration.unregister();
+      }
+      resetInitState();
+      return initScramjet();
     });
   }
 
   return appBootPromise;
 }
 
-async function navigate(inputValue) {
-  const target = normalizeInput(inputValue);
-  console.debug("[client] normalized target", target);
+async function navigate(inputValue, engineTemplate = getEngineById(selectedEngineId).template) {
+  const token = ++navToken;
+  const t0 = performance.now();
+  const target = normalizeInput(inputValue, engineTemplate);
 
   await ensureAppReady();
+  if (token !== navToken) return;
 
   const scramjet = await getScramjet();
   if (!scramjetFrame) {
@@ -260,97 +343,169 @@ async function navigate(inputValue) {
   const proxiedUrl = scramjetFrame.frame.src;
   proxyFrame.src = proxiedUrl;
   addressInput.value = target;
-
-  hasNavigated = true;
-  compactOmnibar();
+  devLog(`[perf] Navigation ${(performance.now() - t0).toFixed(1)}ms`, target);
 }
 
-function focusAddressBar(selectAll = true) {
-  showOmnibar();
-  addressInput.focus({ preventScroll: true });
-  if (selectAll) addressInput.select();
-}
+function setSpotlightOpen(open, focusInput = false) {
+  isSpotlightOpen = open;
+  spotlightShell.classList.toggle("is-open", open);
+  toggleArrow.textContent = open ? "↑" : "↓";
+  spotlightToggle.setAttribute("aria-expanded", String(open));
 
-function showOmnibar() {
-  omnibarWrap.classList.add("is-visible");
-}
-
-function hideOmnibar() {
-  if (!hasNavigated || document.activeElement === addressInput) return;
-  omnibarWrap.classList.remove("is-visible");
-}
-
-function compactOmnibar() {
-  omnibarWrap.classList.remove("is-centered");
-  omnibarWrap.classList.add("is-compact", "is-visible");
-}
-
-function centeredOmnibar() {
-  omnibarWrap.classList.add("is-centered", "is-visible");
-  omnibarWrap.classList.remove("is-compact");
-}
-
-navForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  try {
-    await navigate(addressInput.value);
-  } catch (error) {
-    console.error(error);
-    addressInput.value = "";
-    addressInput.placeholder = "Unable to start proxy. Check console.";
-    focusAddressBar(false);
+  if (open && focusInput) {
+    addressInput.focus({ preventScroll: true });
+    addressInput.select();
   }
-});
+}
 
-addressInput.addEventListener("focus", () => addressInput.select());
+function moveChipFocus(step) {
+  const chips = Array.from(engineRow.querySelectorAll(".engine-chip"));
+  if (!chips.length) return;
 
-window.addEventListener("keydown", (event) => {
+  chipFocusIndex = chipFocusIndex < 0 ? 0 : (chipFocusIndex + step + chips.length) % chips.length;
+  chips[chipFocusIndex].focus();
+}
+
+function handleGlobalKeys(event) {
   const cmdOrCtrl = event.metaKey || event.ctrlKey;
-
   if (cmdOrCtrl && event.key.toLowerCase() === "l") {
     event.preventDefault();
-    focusAddressBar(true);
+    setSpotlightOpen(true, true);
     return;
   }
 
-  if (event.key === "Escape" && document.activeElement === addressInput) {
-    addressInput.blur();
-  }
-});
-
-window.addEventListener(
-  "wheel",
-  (event) => {
-    if (!hasNavigated) return;
-
-    if (event.deltaY > 10) {
-      hideOmnibar();
-    } else if (event.deltaY < -6) {
-      showOmnibar();
+  const isInputFocused = document.activeElement === addressInput;
+  if (event.key === "ArrowDown") {
+    if (!isInputFocused || addressInput.value.trim() === "") {
+      event.preventDefault();
+      setSpotlightOpen(true, true);
     }
-  },
-  { passive: true }
-);
-
-window.addEventListener("scroll", () => {
-  const y = window.scrollY || 0;
-  if (y < lastScrollY) showOmnibar();
-  lastScrollY = y;
-});
-
-window.addEventListener("mousemove", (event) => {
-  if (event.clientY < 72) {
-    showOmnibar();
-    clearTimeout(hideTimer);
-    hideTimer = setTimeout(() => hideOmnibar(), 1800);
+    return;
   }
-});
 
-document.addEventListener("DOMContentLoaded", () => {
-  centeredOmnibar();
-  focusAddressBar(false);
+  if (event.key === "ArrowUp") {
+    if (!isInputFocused || addressInput.value.trim() === "") {
+      event.preventDefault();
+      setSpotlightOpen(false, false);
+    }
+    return;
+  }
 
-  ensureAppReady().catch(() => {
-    addressInput.placeholder = "Proxy initialization failed. Use Reset proxy storage.";
+  if (event.key === "Escape") {
+    if (document.activeElement === addressInput && addressInput.value.trim()) {
+      addressInput.blur();
+      return;
+    }
+
+    if (document.activeElement === addressInput || isSpotlightOpen) {
+      setSpotlightOpen(false, false);
+      addressInput.blur();
+    }
+  }
+}
+
+function bindEvents() {
+  spotlightToggle.addEventListener("click", () => {
+    setSpotlightOpen(!isSpotlightOpen, isSpotlightOpen === false);
   });
-});
+
+  navForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    try {
+      await navigate(addressInput.value);
+      setSpotlightOpen(false, false);
+    } catch (error) {
+      console.error(error);
+      addressInput.placeholder = "Unable to start proxy.";
+      setSpotlightOpen(true, true);
+    }
+  });
+
+  addressInput.addEventListener("focus", () => {
+    setSpotlightOpen(true, false);
+  });
+
+  addressInput.addEventListener("keydown", (event) => {
+    if (event.key === "Tab" && !event.shiftKey) {
+      event.preventDefault();
+      moveChipFocus(1);
+      return;
+    }
+
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      chipFocusIndex = -1;
+    }
+  });
+
+  toggleCustomEditorBtn.addEventListener("click", () => {
+    if (customEngineEditor.hidden) {
+      openCustomEditor();
+    } else {
+      closeCustomEditor();
+    }
+  });
+
+  cancelCustomEditorBtn.addEventListener("click", () => closeCustomEditor());
+
+  customEngineEditor.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const name = customEngineName.value.trim();
+    const template = customEngineTemplate.value.trim();
+    const validationError = validateEngineInput(name, template);
+
+    if (validationError) {
+      customEditorError.textContent = validationError;
+      return;
+    }
+
+    const entry = {
+      id: `custom-${Date.now()}`,
+      name,
+      template
+    };
+
+    engineState.custom.push(entry);
+    engineState.defaultEngineId = entry.id;
+    selectedEngineId = entry.id;
+    persistEngineState();
+    renderEngineChips();
+    closeCustomEditor();
+  });
+
+  retryInitBtn.addEventListener("click", async () => {
+    try {
+      resetPanel.hidden = true;
+      resetInitState();
+      await ensureAppReady();
+    } catch (error) {
+      console.error(error);
+      resetPanel.hidden = false;
+    }
+  });
+
+  resetProxyStorageBtn.addEventListener("click", async () => {
+    try {
+      await hardResetProxyStorage();
+    } catch (error) {
+      console.error("Hard reset failed.", error);
+    }
+  });
+
+  window.addEventListener("keydown", handleGlobalKeys, { passive: false });
+}
+
+async function boot() {
+  parseEngineStorage();
+  selectedEngineId = getEngineById(engineState.defaultEngineId).id;
+  renderEngineChips();
+  bindEvents();
+
+  try {
+    await ensureAppReady();
+  } catch (error) {
+    console.error("Startup failed.", error);
+    resetPanel.hidden = false;
+  }
+}
+
+void boot();
