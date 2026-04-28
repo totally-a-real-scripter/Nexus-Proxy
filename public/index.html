@@ -11,70 +11,69 @@
     <script src="/client.js?v=scramjet-8" defer></script>
   </head>
   <body>
-    <main class="app-shell" id="appShell">
-      <section class="viewport" id="viewport">
-        <iframe
-          id="proxyFrame"
-          class="proxy-frame"
-          title="Proxied content"
-          referrerpolicy="no-referrer"
-          allow="clipboard-read; clipboard-write"
-        ></iframe>
-      </section>
+    <iframe
+      id="proxyFrame"
+      class="proxy-frame"
+      title="Proxied content"
+      referrerpolicy="no-referrer"
+      allow="clipboard-read; clipboard-write"
+    ></iframe>
 
-      <div id="spotlightShell" class="spotlight-shell">
-        <button id="spotlightToggle" class="spotlight-toggle" type="button" aria-label="Toggle search" aria-expanded="false">
-          <span class="toggle-arrow" id="toggleArrow" aria-hidden="true">⌄</span>
-        </button>
+    <div id="spotlightShell" class="spotlight-shell is-collapsed">
+      <form id="searchForm" class="spotlight-panel" autocomplete="off" spellcheck="false">
+        <div class="spotlight-input-row">
+          <span class="spotlight-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="7"></circle>
+              <path d="M20 20L16.65 16.65"></path>
+            </svg>
+          </span>
 
-        <section class="spotlight-panel" id="spotlightPanel" aria-label="Address and search">
-          <form id="navForm" autocomplete="off" spellcheck="false">
-            <div class="spotlight-input-row">
-              <span class="spotlight-icon" aria-hidden="true">⌕</span>
-              <input
-                id="addressInput"
-                class="spotlight-input"
-                type="text"
-                inputmode="url"
-                placeholder="Search or enter URL"
-                aria-label="Address or search"
-                autocomplete="off"
-                spellcheck="false"
-              />
-              <button id="clearInput" class="spotlight-clear" type="button" aria-label="Clear search">×</button>
-            </div>
+          <input
+            id="urlInput"
+            class="spotlight-input"
+            type="text"
+            inputmode="url"
+            placeholder="Spotlight Search"
+            autocomplete="off"
+            spellcheck="false"
+            aria-label="Search or enter URL"
+          />
 
-            <div id="engineRow" class="engine-row" aria-label="Search engines"></div>
-          </form>
-
-          <button class="link-btn" id="toggleCustomEditor" type="button">Add search engine</button>
-
-          <form class="custom-engine-editor" id="customEngineEditor" hidden>
-            <input id="customEngineName" type="text" placeholder="Name" maxlength="32" required />
-            <input
-              id="customEngineTemplate"
-              type="url"
-              placeholder="https://example.com/search?q={query}"
-              inputmode="url"
-              required
-            />
-            <div class="editor-actions">
-              <button type="submit">Save</button>
-              <button type="button" id="cancelCustomEditor">Cancel</button>
-            </div>
-            <p id="customEditorError" class="inline-error" aria-live="polite"></p>
-          </form>
-        </section>
-      </div>
-
-      <section class="reset-panel" id="resetPanel" hidden>
-        <h2>Proxy startup failed</h2>
-        <p>Scramjet could not initialize. You can retry once or reset proxy storage.</p>
-        <div class="editor-actions">
-          <button id="retryInitBtn" type="button">Retry</button>
-          <button id="resetProxyStorageBtn" type="button">Reset storage</button>
+          <button id="clearInput" class="spotlight-clear" type="button" aria-label="Clear search">×</button>
         </div>
-      </section>
-    </main>
+
+        <div id="engineRow" class="engine-row" aria-label="Search engines"></div>
+
+        <div id="customEngineEditor" class="custom-engine-editor" hidden>
+          <input id="customEngineName" type="text" placeholder="Engine name" maxlength="32" required />
+          <input
+            id="customEngineTemplate"
+            type="url"
+            inputmode="url"
+            placeholder="https://example.com/search?q={query}"
+            required
+          />
+          <div class="editor-actions">
+            <button type="submit" id="saveCustomEngine">Save</button>
+            <button type="button" id="cancelCustomEditor">Cancel</button>
+          </div>
+          <p id="customEditorError" class="inline-error" aria-live="polite"></p>
+        </div>
+      </form>
+
+      <button id="spotlightToggle" class="spotlight-toggle" type="button" aria-label="Toggle search" aria-expanded="false">
+        <span class="toggle-arrow" aria-hidden="true">⌄</span>
+      </button>
+    </div>
+
+    <section class="reset-panel" id="resetPanel" hidden>
+      <h2>Proxy startup failed</h2>
+      <p>Scramjet could not initialize. You can retry once or reset proxy storage.</p>
+      <div class="editor-actions">
+        <button id="retryInitBtn" type="button">Retry</button>
+        <button id="resetProxyStorageBtn" type="button">Reset storage</button>
+      </div>
+    </section>
   </body>
 </html>
