@@ -1,6 +1,6 @@
 const WISP_PATH = "/wisp/";
-const ASSET_VERSION = "scramjet-3";
-const SCRAMJET_DB_NAMES = ["$scramjet", "bare-mux"];
+const ASSET_VERSION = "scramjet-4";
+const SCRAMJET_DB_NAMES = ["$scramjet", "scramjet", "bare-mux", "baremux", "epoxy", "proxy-transports"];
 const SCRAMJET_STORAGE_KEYS = ["scramjet", "$scramjet", "bare-mux-path", "baremux"];
 
 const omnibarWrap = document.getElementById("omnibarWrap");
