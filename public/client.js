@@ -1,5 +1,6 @@
 const WISP_PATH = "/wisp/";
-const ASSET_VERSION = "scramjet-9";
+const ASSET_VERSION = "scramjet-10";
+console.log("[ui-debug] client.js loaded", new Date().toISOString());
 const STORAGE_KEY = "proxy.searchEngines.v1";
 const DEV =
   window.location.hostname === "localhost" ||
@@ -168,9 +169,77 @@ function initUI() {
   spotlightShell.classList.add("is-open");
   spotlightToggle.setAttribute("aria-expanded", "true");
   syncSpotlightState();
+  spotlightShell.style.display = "block";
+  spotlightShell.style.visibility = "visible";
+  spotlightShell.style.opacity = "1";
 
   requestAnimationFrame(() => {
     urlInput.focus({ preventScroll: true });
+  });
+}
+
+function runVisibilityDiagnostics() {
+  console.log("[ui-debug] DOMContentLoaded");
+
+  const shell = document.getElementById("spotlightShell");
+  const form = document.getElementById("searchForm");
+  const input = document.getElementById("urlInput");
+  const frame = document.getElementById("proxyFrame");
+
+  console.log("[ui-debug] elements", {
+    shell: !!shell,
+    form: !!form,
+    input: !!input,
+    frame: !!frame
+  });
+
+  if (!shell) {
+    const emergency = document.createElement("div");
+    emergency.id = "spotlightShell";
+    emergency.innerHTML = `
+      <form id="searchForm">
+        <input id="urlInput" placeholder="Emergency Search Visible" />
+      </form>
+    `;
+    document.body.appendChild(emergency);
+    console.error("[ui-debug] spotlightShell was missing, emergency UI inserted");
+  }
+
+  const actualShell = document.getElementById("spotlightShell");
+  Object.assign(actualShell.style, {
+    position: "fixed",
+    top: "40px",
+    left: "50%",
+    transform: "translateX(-50%)",
+    zIndex: "2147483647",
+    width: "520px",
+    maxWidth: "calc(100vw - 32px)",
+    minHeight: "70px",
+    display: "block",
+    visibility: "visible",
+    opacity: "1",
+    pointerEvents: "auto",
+    background: "rgba(255,0,0,.35)",
+    outline: "4px solid red"
+  });
+
+  const rect = actualShell.getBoundingClientRect();
+  const style = getComputedStyle(actualShell);
+  console.log("[ui-debug] shell rect/style", {
+    rect: {
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+      top: rect.top,
+      left: rect.left
+    },
+    display: style.display,
+    visibility: style.visibility,
+    opacity: style.opacity,
+    zIndex: style.zIndex,
+    position: style.position,
+    transform: style.transform
   });
 }
 
@@ -617,13 +686,36 @@ async function boot() {
   }
 
   initUI();
-
-  try {
-    await ensureProxyReady();
-  } catch (error) {
-    console.error("Startup failed.", error);
-    resetPanel.hidden = false;
-  }
 }
 
-void boot();
+function initProxyInBackground() {
+  ensureProxyReady().catch((error) => {
+    console.error("[proxy] background init failed", error);
+    resetPanel.hidden = false;
+  });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  try {
+    runVisibilityDiagnostics();
+    void boot();
+    initProxyInBackground();
+  } catch (error) {
+    console.error("[fatal client startup error]", error);
+    const emergency = document.createElement("div");
+    emergency.style.cssText = `
+      position: fixed;
+      top: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 2147483647;
+      background: red;
+      color: white;
+      padding: 20px;
+      border-radius: 16px;
+      font: 16px system-ui;
+    `;
+    emergency.textContent = "Client JS crashed before UI init. Check console.";
+    document.body.appendChild(emergency);
+  }
+});
