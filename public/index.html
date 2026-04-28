@@ -4,28 +4,24 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Nexus Proxy</title>
-    <link rel="stylesheet" href="/style.css?v=scramjet-10" />
-    <script src="/baremux/index.js?v=scramjet-10"></script>
-    <script src="/epoxy/index.js?v=scramjet-10"></script>
-    <script src="/scram/scramjet.all.js?v=scramjet-10"></script>
-    <script src="/client.js?v=scramjet-10" defer></script>
+    <link rel="stylesheet" href="/style.css?v=scramjet-11" />
+    <script src="/baremux/index.js?v=scramjet-11"></script>
+    <script src="/epoxy/index.js?v=scramjet-11"></script>
   </head>
   <body>
-    <iframe
-      id="proxyFrame"
-      class="proxy-frame"
-      title="Proxied content"
-      referrerpolicy="no-referrer"
-      allow="clipboard-read; clipboard-write"
-    ></iframe>
+    <iframe id="proxyFrame" class="proxy-frame" title="Proxied content"></iframe>
 
-    <div id="spotlightShell" class="spotlight-shell is-open" data-debug-visible="true">
-      <form id="searchForm" class="spotlight-panel" autocomplete="off" spellcheck="false">
+    <div id="spotlightShell" class="spotlight-shell is-open">
+      <form id="searchForm" class="spotlight-panel" autocomplete="off">
         <div class="spotlight-input-row">
           <span class="spotlight-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="11" cy="11" r="7"></circle>
-              <path d="M20 20L16.65 16.65"></path>
+            <svg viewBox="0 0 24 24" fill="none">
+              <path
+                d="m21 21-4.35-4.35m1.35-5.15a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0Z"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              />
             </svg>
           </span>
 
@@ -33,37 +29,18 @@
             id="urlInput"
             class="spotlight-input"
             type="text"
-            inputmode="url"
-            placeholder="Spotlight Search"
-            autocomplete="off"
+            placeholder="Search or enter URL"
             spellcheck="false"
+            autocomplete="off"
             aria-label="Search or enter URL"
           />
 
           <button id="clearInput" class="spotlight-clear" type="button" aria-label="Clear search">×</button>
         </div>
-
-        <div id="engineRow" class="engine-row" aria-label="Search engines"></div>
-
-        <div id="customEngineEditor" class="custom-engine-editor" hidden>
-          <input id="customEngineName" type="text" placeholder="Engine name" maxlength="32" required />
-          <input
-            id="customEngineTemplate"
-            type="url"
-            inputmode="url"
-            placeholder="https://example.com/search?q={query}"
-            required
-          />
-          <div class="editor-actions">
-            <button type="submit" id="saveCustomEngine">Save</button>
-            <button type="button" id="cancelCustomEditor">Cancel</button>
-          </div>
-          <p id="customEditorError" class="inline-error" aria-live="polite"></p>
-        </div>
       </form>
 
-      <button id="spotlightToggle" class="spotlight-toggle" type="button" aria-label="Toggle search" aria-expanded="true">
-        <span class="toggle-arrow" aria-hidden="true">⌄</span>
+      <button id="spotlightToggle" class="spotlight-toggle" type="button" aria-label="Toggle search">
+        <span class="toggle-arrow">⌄</span>
       </button>
     </div>
 
@@ -75,5 +52,8 @@
         <button id="resetProxyStorageBtn" type="button">Reset storage</button>
       </div>
     </section>
+
+    <script src="/scram/scramjet.all.js?v=scramjet-11"></script>
+    <script src="/client.js?v=scramjet-11" defer></script>
   </body>
 </html>

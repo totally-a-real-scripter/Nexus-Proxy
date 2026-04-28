@@ -89,26 +89,38 @@ app.get("/debug-ui", (_req, res) => {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Nexus Proxy UI Debug</title>
-    <link rel="stylesheet" href="/style.css?v=scramjet-10" />
+    <link rel="stylesheet" href="/style.css?v=scramjet-11" />
   </head>
   <body>
-    <div id="spotlightShell" class="spotlight-shell is-open" data-debug-visible="true">
+    <div id="spotlightShell" class="spotlight-shell is-open">
       <form id="searchForm" class="spotlight-panel" autocomplete="off">
         <div class="spotlight-input-row">
-          <span class="spotlight-icon" aria-hidden="true">⌕</span>
+          <span class="spotlight-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path
+                d="m21 21-4.35-4.35m1.35-5.15a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0Z"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              />
+            </svg>
+          </span>
           <input
             id="urlInput"
             class="spotlight-input"
             type="text"
-            placeholder="Spotlight Search"
+            placeholder="Search or enter URL"
             spellcheck="false"
             autocomplete="off"
             aria-label="Search or enter URL"
           />
           <button id="clearInput" class="spotlight-clear" type="button" aria-label="Clear search">×</button>
         </div>
-        <div id="engineRow" class="engine-row" aria-label="Search engines"></div>
       </form>
+
+      <button id="spotlightToggle" class="spotlight-toggle" type="button" aria-label="Toggle search">
+        <span class="toggle-arrow">⌄</span>
+      </button>
     </div>
   </body>
 </html>`);
