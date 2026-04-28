@@ -5,7 +5,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "start": "node server.js",
+    "start": "node scripts/patch-epoxy-headers.js && node server.js",
     "postinstall": "node scripts/patch-epoxy-headers.js"
   },
   "dependencies": {
