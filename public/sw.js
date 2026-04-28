@@ -1,4 +1,4 @@
-const ASSET_VERSION = "scramjet-4";
+const ASSET_VERSION = "scramjet-5";
 importScripts(`/scram/scramjet.all.js?v=${ASSET_VERSION}`);
 
 const { ScramjetServiceWorker } = $scramjetLoadWorker();
@@ -34,6 +34,40 @@ function storageErrorResponse() {
   );
 }
 
+function isInternalBypass(url) {
+  return (
+    url.pathname === "/" ||
+    url.pathname === "/reset" ||
+    url.pathname === "/health" ||
+    url.pathname === "/client.js" ||
+    url.pathname === "/style.css" ||
+    url.pathname === "/favicon.ico" ||
+    url.pathname === "/sw.js" ||
+    url.pathname === "/robots.txt" ||
+    url.pathname.startsWith("/scram/") ||
+    url.pathname.startsWith("/baremux/") ||
+    url.pathname.startsWith("/epoxy/") ||
+    url.pathname.startsWith("/wisp/") ||
+    url.pathname.startsWith("/assets/")
+  );
+}
+
+function safeLogRequest(event) {
+  const request = event.request;
+  const url = new URL(request.url);
+  console.debug("[scramjet-sw] route request", {
+    url: request.url,
+    pathname: url.pathname,
+    method: request.method,
+    destination: request.destination,
+    mode: request.mode,
+    credentials: request.credentials,
+    redirect: request.redirect,
+    referrer: request.referrer,
+    hasClientId: !!event.clientId
+  });
+}
+
 self.addEventListener("install", () => {
   console.info("[sw] install");
   self.skipWaiting();
@@ -49,16 +83,7 @@ self.addEventListener("fetch", (event) => {
     (async () => {
       const url = new URL(event.request.url);
 
-      if (
-        url.origin === location.origin &&
-        (url.pathname === "/reset" ||
-          url.pathname === "/health" ||
-          url.pathname.startsWith("/scram/") ||
-          url.pathname.startsWith("/baremux/") ||
-          url.pathname.startsWith("/epoxy/") ||
-          url.pathname === "/client.js" ||
-          url.pathname === "/style.css")
-      ) {
+      if (url.origin === location.origin && isInternalBypass(url)) {
         return fetch(event.request);
       }
 
@@ -66,7 +91,26 @@ self.addEventListener("fetch", (event) => {
         await ensureConfig();
 
         if (scramjet.route(event)) {
-          return await scramjet.fetch(event);
+          try {
+            safeLogRequest(event);
+            const response = await scramjet.fetch(event);
+            console.debug("[scramjet-sw] response returned", {
+              type: response && response.type,
+              status: response && response.status,
+              url: response && response.url,
+              redirected: response && response.redirected,
+              contentType: response?.headers?.get ? response.headers.get("content-type") ?? null : null
+            });
+            return response;
+          } catch (error) {
+            console.error("[scramjet-sw] scramjet.fetch failed", {
+              message: error && error.message,
+              stack: error && error.stack,
+              requestUrl: event.request && event.request.url,
+              destination: event.request && event.request.destination
+            });
+            throw error;
+          }
         }
 
         return await fetch(event.request);

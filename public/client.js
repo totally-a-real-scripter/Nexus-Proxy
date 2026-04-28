@@ -1,5 +1,5 @@
 const WISP_PATH = "/wisp/";
-const ASSET_VERSION = "scramjet-4";
+const ASSET_VERSION = "scramjet-5";
 const SCRAMJET_DB_NAMES = ["$scramjet", "scramjet", "bare-mux", "baremux", "epoxy", "proxy-transports"];
 const SCRAMJET_STORAGE_KEYS = ["scramjet", "$scramjet", "bare-mux-path", "baremux"];
 
@@ -19,16 +19,16 @@ let hideTimer;
 
 function normalizeInput(raw) {
   const value = raw.trim();
-  if (!value) return null;
+  if (!value) {
+    throw new Error("Enter a URL or search query.");
+  }
 
-  const looksLikeUrl = value.includes(".") && !value.includes(" ");
-  if (looksLikeUrl) {
-    const withProtocol = /^[a-zA-Z][a-zA-Z\d+.-]*:\/\//.test(value) ? value : `https://${value}`;
-    try {
-      return new URL(withProtocol).toString();
-    } catch {
-      return null;
-    }
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(value)) {
+    return new URL(value).href;
+  }
+
+  if (value.includes(".") && !/\s/.test(value)) {
+    return new URL(`https://${value}`).href;
   }
 
   return `https://www.google.com/search?q=${encodeURIComponent(value)}`;
@@ -247,7 +247,7 @@ async function ensureAppReady() {
 
 async function navigate(inputValue) {
   const target = normalizeInput(inputValue);
-  if (!target) return;
+  console.debug("[client] normalized target", target);
 
   await ensureAppReady();
 
