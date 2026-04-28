@@ -5,32 +5,75 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Nexus Proxy</title>
     <link rel="stylesheet" href="/style.css" />
-    <script src="/baremux/index.js?v=scramjet-6"></script>
-    <script src="/epoxy/index.js?v=scramjet-6"></script>
-    <script src="/scram/scramjet.all.js?v=scramjet-6"></script>
-    <script src="/client.js?v=scramjet-6" defer></script>
+    <script src="/baremux/index.js?v=scramjet-7"></script>
+    <script src="/epoxy/index.js?v=scramjet-7"></script>
+    <script src="/scram/scramjet.all.js?v=scramjet-7"></script>
+    <script src="/client.js?v=scramjet-7" defer></script>
   </head>
   <body>
     <main class="app-shell" id="appShell">
-      <header class="omnibar-wrap is-centered is-visible" id="omnibarWrap">
-        <form id="navForm" class="omnibar" autocomplete="off" spellcheck="false">
-          <input
-            id="addressInput"
-            type="text"
-            inputmode="url"
-            placeholder="https://example.com"
-            aria-label="Address or search"
-          />
-        </form>
-      </header>
-
       <section class="viewport" id="viewport">
         <iframe
           id="proxyFrame"
+          class="proxy-frame"
           title="Proxied content"
           referrerpolicy="no-referrer"
           allow="clipboard-read; clipboard-write"
         ></iframe>
+      </section>
+
+      <div class="spotlight-shell is-open" id="spotlightShell">
+        <button
+          class="spotlight-toggle"
+          id="spotlightToggle"
+          type="button"
+          aria-label="Toggle search"
+          aria-expanded="true"
+        >
+          <span id="toggleArrow" aria-hidden="true">↑</span>
+        </button>
+
+        <section class="spotlight-panel" id="spotlightPanel" aria-label="Address and search">
+          <form id="navForm" autocomplete="off" spellcheck="false">
+            <input
+              id="addressInput"
+              class="search-input"
+              type="text"
+              inputmode="url"
+              placeholder="Enter URL or search"
+              aria-label="Address or search"
+            />
+          </form>
+
+          <div class="engine-row" id="engineRow" aria-label="Search engines"></div>
+
+          <button class="link-btn" id="toggleCustomEditor" type="button">Add search engine</button>
+
+          <form class="custom-engine-editor" id="customEngineEditor" hidden>
+            <input id="customEngineName" type="text" placeholder="Name" maxlength="32" required />
+            <input
+              id="customEngineTemplate"
+              type="url"
+              placeholder="https://example.com/search?q={query}"
+              inputmode="url"
+              required
+            />
+            <div class="editor-actions">
+              <button type="submit">Save</button>
+              <button type="button" id="cancelCustomEditor">Cancel</button>
+            </div>
+            <p id="customEditorError" class="inline-error" aria-live="polite"></p>
+          </form>
+        </section>
+      </div>
+
+      <section class="reset-panel" id="resetPanel" hidden>
+        <h2>Proxy startup failed</h2>
+        <p>Scramjet could not initialize. You can retry once or reset proxy storage.</p>
+        <div class="editor-actions">
+          <button id="retryInitBtn" type="button">Retry</button>
+          <button id="resetProxyStorageBtn" type="button">Reset storage</button>
+        </div>
       </section>
     </main>
   </body>
