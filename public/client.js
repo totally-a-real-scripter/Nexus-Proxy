@@ -1,5 +1,5 @@
 const WISP_PATH = "/wisp/";
-const ASSET_VERSION = "scramjet-2";
+const ASSET_VERSION = "scramjet-3";
 const SCRAMJET_DB_NAMES = ["$scramjet", "bare-mux"];
 const SCRAMJET_STORAGE_KEYS = ["scramjet", "$scramjet", "bare-mux-path", "baremux"];
 
@@ -137,15 +137,15 @@ async function ensureTransport() {
       throw new Error("BareMux runtime missing.");
     }
 
-    const conn = new window.BareMux.BareMuxConnection("/baremux/worker.js");
+    const conn = new window.BareMux.BareMuxConnection(`/baremux/worker.js?v=${ASSET_VERSION}`);
     const wispUrl =
       (window.location.protocol === "https:" ? "wss://" : "ws://") +
       window.location.host +
       WISP_PATH;
 
-    console.info("[proxy:init] Transport URL", "/epoxy/index.mjs");
+    console.info("[proxy:init] Transport URL", `/epoxy/index.mjs?v=${ASSET_VERSION}`);
     console.info("[proxy:init] Wisp URL", wispUrl);
-    await conn.setTransport("/epoxy/index.mjs", [{ wisp: wispUrl }]);
+    await conn.setTransport(`/epoxy/index.mjs?v=${ASSET_VERSION}`, [{ wisp: wispUrl }]);
     console.info("[proxy:init] BareMux transport configured");
   })();
 
@@ -187,9 +187,9 @@ async function getScramjet() {
     const { ScramjetController } = window.$scramjetLoadController();
     const scramjet = new ScramjetController({
       files: {
-        wasm: "/scram/scramjet.wasm.wasm",
-        all: "/scram/scramjet.all.js",
-        sync: "/scram/scramjet.sync.js"
+        wasm: `/scram/scramjet.wasm.wasm?v=${ASSET_VERSION}`,
+        all: `/scram/scramjet.all.js?v=${ASSET_VERSION}`,
+        sync: `/scram/scramjet.sync.js?v=${ASSET_VERSION}`
       }
     });
 
