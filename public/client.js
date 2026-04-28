@@ -1,11 +1,7 @@
 const WISP_PATH = "/wisp/";
 const ASSET_VERSION = "scramjet-2";
-const SCRAMJET_DB_NAMES = ["$scramjet"];
-const SCRAMJET_STORAGE_KEYS = ["scramjet", "$scramjet"];
-
-if (typeof window.$scramjetLoadController !== "function") {
-  throw new Error("Scramjet controller is unavailable. Check /scram/scramjet.all.js.");
-}
+const SCRAMJET_DB_NAMES = ["$scramjet", "bare-mux"];
+const SCRAMJET_STORAGE_KEYS = ["scramjet", "$scramjet", "bare-mux-path", "baremux"];
 
 const omnibarWrap = document.getElementById("omnibarWrap");
 const navForm = document.getElementById("navForm");
@@ -105,8 +101,8 @@ function showResetProxyError(error) {
   ].join(";");
 
   banner.innerHTML = `
-    <strong style="display:block;margin-bottom:6px;">Proxy storage error</strong>
-    <p style="margin:0 0 10px 0;font-size:14px;line-height:1.4;">Scramjet storage appears stale or corrupted. Reset proxy storage and reload.</p>
+    <strong style="display:block;margin-bottom:6px;">Proxy startup failed</strong>
+    <p style="margin:0 0 10px 0;font-size:14px;line-height:1.4;">Proxy startup failed. Reset proxy storage.</p>
     <button id="resetProxyStorageBtn" type="button" style="background:#5a9cff;color:#04121f;border:0;border-radius:8px;padding:8px 12px;font-weight:600;cursor:pointer;">Reset proxy storage</button>
   `;
 
@@ -135,6 +131,8 @@ async function ensureTransport() {
   if (transportReadyPromise) return transportReadyPromise;
 
   transportReadyPromise = (async () => {
+    console.info("[proxy:init] BareMux global", !!window.BareMux);
+
     if (!window.BareMux?.BareMuxConnection) {
       throw new Error("BareMux runtime missing.");
     }
@@ -145,7 +143,10 @@ async function ensureTransport() {
       window.location.host +
       WISP_PATH;
 
+    console.info("[proxy:init] Transport URL", "/epoxy/index.mjs");
+    console.info("[proxy:init] Wisp URL", wispUrl);
     await conn.setTransport("/epoxy/index.mjs", [{ wisp: wispUrl }]);
+    console.info("[proxy:init] BareMux transport configured");
   })();
 
   return transportReadyPromise;
@@ -163,9 +164,11 @@ async function ensureServiceWorker() {
       scope: "/",
       updateViaCache: "none"
     });
+    console.info("[proxy:init] Service worker registered", registration.scope);
 
     await registration.update();
     await navigator.serviceWorker.ready;
+    console.info("[proxy:init] Service worker ready");
   })();
 
   return swReadyPromise;
@@ -176,6 +179,11 @@ async function getScramjet() {
   if (scramjetReadyPromise) return scramjetReadyPromise;
 
   scramjetReadyPromise = (async () => {
+    console.info("[proxy:init] Scramjet global", typeof window.$scramjetLoadController === "function");
+    if (typeof window.$scramjetLoadController !== "function") {
+      throw new Error("Scramjet controller unavailable.");
+    }
+
     const { ScramjetController } = window.$scramjetLoadController();
     const scramjet = new ScramjetController({
       files: {
@@ -186,6 +194,7 @@ async function getScramjet() {
     });
 
     await scramjet.init();
+    console.info("[proxy:init] Scramjet init complete");
     window.__scramjetInstance = scramjet;
     return scramjet;
   })();
@@ -202,8 +211,8 @@ function resetInitState() {
 }
 
 async function initScramjet() {
-  await getScramjet();
   await ensureTransport();
+  await getScramjet();
   await ensureServiceWorker();
 }
 
@@ -337,7 +346,7 @@ window.addEventListener("mousemove", (event) => {
   }
 });
 
-window.addEventListener("load", () => {
+document.addEventListener("DOMContentLoaded", () => {
   centeredOmnibar();
   focusAddressBar(false);
 

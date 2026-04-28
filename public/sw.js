@@ -12,16 +12,21 @@ async function ensureConfig() {
       console.error("Scramjet loadConfig failed:", error);
       throw error;
     });
+    configReadyPromise.then(() => {
+      console.info("[sw] loadConfig success");
+    });
   }
 
   return configReadyPromise;
 }
 
 self.addEventListener("install", () => {
+  console.info("[sw] install");
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
+  console.info("[sw] activate");
   event.waitUntil(self.clients.claim());
 });
 
