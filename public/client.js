@@ -20,36 +20,32 @@ const BUILTIN_ENGINES = [
 
 const spotlightShell = document.getElementById("spotlightShell");
 const spotlightToggle = document.getElementById("spotlightToggle");
-const navForm = document.getElementById("navForm");
-const addressInput = document.getElementById("addressInput");
+const searchForm = document.getElementById("searchForm");
+const urlInput = document.getElementById("urlInput");
 const clearInput = document.getElementById("clearInput");
 const proxyFrame = document.getElementById("proxyFrame");
 const engineRow = document.getElementById("engineRow");
-const toggleCustomEditorBtn = document.getElementById("toggleCustomEditor");
 const customEngineEditor = document.getElementById("customEngineEditor");
 const customEngineName = document.getElementById("customEngineName");
 const customEngineTemplate = document.getElementById("customEngineTemplate");
 const customEditorError = document.getElementById("customEditorError");
 const cancelCustomEditorBtn = document.getElementById("cancelCustomEditor");
+const saveCustomEngineBtn = document.getElementById("saveCustomEngine");
 const resetPanel = document.getElementById("resetPanel");
 const retryInitBtn = document.getElementById("retryInitBtn");
 const resetProxyStorageBtn = document.getElementById("resetProxyStorageBtn");
 
-let swReadyPromise;
-let transportReadyPromise;
-let scramjetReadyPromise;
-let proxyReadyPromise;
-let scramjetFrame;
-let selectedEngineId = "google";
+let collapseTimer = null;
+let proxyReadyPromise = null;
+let serviceWorkerReadyPromise = null;
+let transportReadyPromise = null;
+let scramjetReadyPromise = null;
+let hasBoundEvents = false;
 let hasInitRetried = false;
 let navToken = 0;
-let chipFocusIndex = -1;
-let collapseTimer;
-let isOpen = false;
-let isFocused = false;
-let hasValue = false;
-let revealRaf = 0;
-let didBindEvents = false;
+let selectedEngineId = "google";
+let revealQueued = false;
+let scramjetFrame = null;
 
 const engineState = {
   defaultEngineId: "google",
@@ -64,9 +60,13 @@ function parseEngineStorage() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
+
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === "object") {
-      if (typeof parsed.defaultEngineId === "string") engineState.defaultEngineId = parsed.defaultEngineId;
+      if (typeof parsed.defaultEngineId === "string") {
+        engineState.defaultEngineId = parsed.defaultEngineId;
+      }
+
       if (Array.isArray(parsed.custom)) {
         engineState.custom = parsed.custom.filter(
           (engine) =>
@@ -86,7 +86,10 @@ function persistEngineState() {
   try {
     localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ defaultEngineId: engineState.defaultEngineId, custom: engineState.custom })
+      JSON.stringify({
+        defaultEngineId: engineState.defaultEngineId,
+        custom: engineState.custom
+      })
     );
   } catch (error) {
     console.warn("Unable to save search engine settings.", error);
@@ -102,106 +105,42 @@ function getEngineById(id) {
 }
 
 function syncSpotlightState() {
-  hasValue = !!addressInput.value.trim();
+  const hasValue = !!urlInput.value.trim();
   spotlightShell.classList.toggle("has-value", hasValue);
   spotlightShell.classList.toggle("is-typing", hasValue);
-  addressInput.placeholder = hasValue || isOpen || isFocused ? "Spotlight Search" : "Search or enter URL";
-}
-
-function setOpenState(nextOpen) {
-  isOpen = nextOpen;
-  spotlightShell.classList.toggle("is-open", isOpen);
-  spotlightToggle.setAttribute("aria-expanded", String(isOpen));
-}
-
-function setFocusedState(nextFocused) {
-  isFocused = nextFocused;
-  spotlightShell.classList.toggle("is-focused", isFocused);
 }
 
 function openSpotlight({ focus = true } = {}) {
   clearTimeout(collapseTimer);
-  spotlightShell.classList.remove("is-hidden");
-  setOpenState(true);
-  syncSpotlightState();
+  spotlightShell.classList.remove("is-hidden", "is-collapsed");
+  spotlightShell.classList.add("is-open");
+  spotlightToggle.setAttribute("aria-expanded", "true");
 
   if (focus) {
-    requestAnimationFrame(() => addressInput.focus({ preventScroll: true }));
+    requestAnimationFrame(() => {
+      urlInput.focus({ preventScroll: true });
+      urlInput.select();
+    });
   }
 }
 
 function closeSpotlight({ force = false } = {}) {
-  if (!force && addressInput.value.trim()) return;
+  if (!force && urlInput.value.trim()) return;
 
-  setOpenState(false);
-  setFocusedState(false);
-  spotlightShell.classList.remove("is-typing");
-  addressInput.blur();
-  syncSpotlightState();
+  spotlightShell.classList.remove("is-open", "is-focused", "is-typing");
+  spotlightShell.classList.add("is-collapsed");
+  spotlightToggle.setAttribute("aria-expanded", "false");
+  urlInput.blur();
 }
 
 function scheduleCollapse() {
   clearTimeout(collapseTimer);
 
   collapseTimer = setTimeout(() => {
-    if (document.activeElement !== addressInput && !addressInput.value.trim()) {
+    if (document.activeElement !== urlInput && !urlInput.value.trim()) {
       closeSpotlight({ force: true });
     }
   }, 2000);
-}
-
-function renderEngineChips() {
-  engineRow.textContent = "";
-  const engines = getEngines();
-
-  for (const engine of engines) {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "engine-chip";
-    chip.dataset.engineId = engine.id;
-    chip.textContent = engine.name;
-
-    if (engine.id === selectedEngineId) {
-      chip.classList.add("active");
-      chip.setAttribute("aria-current", "true");
-    }
-
-    chip.addEventListener("click", () => {
-      selectedEngineId = engine.id;
-      engineState.defaultEngineId = engine.id;
-      persistEngineState();
-      renderEngineChips();
-      if (addressInput.value.trim()) {
-        void navigate(addressInput.value, engine.template);
-      }
-    });
-
-    if (engine.id.startsWith("custom-")) {
-      const removeBtn = document.createElement("button");
-      removeBtn.type = "button";
-      removeBtn.textContent = " ×";
-      removeBtn.setAttribute("aria-label", `Delete ${engine.name}`);
-      removeBtn.style.cssText = "margin-left:4px;border:0;background:none;color:inherit;cursor:pointer;";
-      removeBtn.addEventListener("click", (event) => {
-        event.stopPropagation();
-        deleteCustomEngine(engine.id);
-      });
-      chip.appendChild(removeBtn);
-    }
-
-    engineRow.appendChild(chip);
-  }
-}
-
-function validateEngineInput(name, template) {
-  if (!name.trim()) return "Name is required.";
-  if (!template.startsWith("https://")) return "Template must start with https://.";
-  if (!template.includes("{query}")) return "Template must include {query}.";
-
-  const duplicate = getEngines().some((engine) => engine.name.toLowerCase() === name.trim().toLowerCase());
-  if (duplicate) return "Engine name already exists.";
-
-  return "";
 }
 
 function openCustomEditor() {
@@ -220,17 +159,84 @@ function closeCustomEditor() {
 
 function deleteCustomEngine(engineId) {
   engineState.custom = engineState.custom.filter((engine) => engine.id !== engineId);
+
   if (selectedEngineId === engineId) {
     selectedEngineId = "google";
     engineState.defaultEngineId = "google";
   }
+
   persistEngineState();
   renderEngineChips();
 }
 
+function renderEngineChips() {
+  engineRow.textContent = "";
+
+  for (const engine of getEngines()) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "engine-chip";
+    chip.dataset.engineId = engine.id;
+    chip.textContent = engine.name;
+
+    if (engine.id === selectedEngineId) {
+      chip.classList.add("active");
+      chip.setAttribute("aria-current", "true");
+    }
+
+    chip.addEventListener("click", () => {
+      selectedEngineId = engine.id;
+      engineState.defaultEngineId = engine.id;
+      persistEngineState();
+      renderEngineChips();
+      if (urlInput.value.trim()) {
+        void navigate(urlInput.value, engine.template);
+      }
+    });
+
+    if (engine.id.startsWith("custom-")) {
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "engine-chip engine-delete";
+      removeBtn.textContent = "×";
+      removeBtn.setAttribute("aria-label", `Delete ${engine.name}`);
+      removeBtn.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        deleteCustomEngine(engine.id);
+      });
+      chip.appendChild(removeBtn);
+    }
+
+    engineRow.appendChild(chip);
+  }
+
+  const addChip = document.createElement("button");
+  addChip.type = "button";
+  addChip.className = "engine-chip engine-add";
+  addChip.textContent = "+ Add";
+  addChip.setAttribute("aria-label", "Add custom search engine");
+  addChip.addEventListener("click", openCustomEditor);
+  engineRow.appendChild(addChip);
+}
+
+function validateEngineInput(name, template) {
+  if (!name.trim()) return "Name is required.";
+  if (!template.startsWith("https://")) return "Template must start with https://.";
+  if (!template.includes("{query}")) return "Template must include {query}.";
+
+  const duplicate = getEngines().some((engine) => engine.name.toLowerCase() === name.trim().toLowerCase());
+  if (duplicate) return "Engine name already exists.";
+
+  return "";
+}
+
 function normalizeInput(raw, engineTemplate) {
   const value = raw.trim();
-  if (!value) throw new Error("Enter a URL or search query.");
+
+  if (!value) {
+    throw new Error("Enter a URL or search query.");
+  }
 
   if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(value)) {
     return new URL(value).href;
@@ -245,6 +251,7 @@ function normalizeInput(raw, engineTemplate) {
 
 async function deleteDatabase(name) {
   if (!("indexedDB" in window)) return false;
+
   return new Promise((resolve) => {
     const request = indexedDB.deleteDatabase(name);
     request.onsuccess = () => resolve(true);
@@ -264,6 +271,7 @@ async function resetScramjetStorage() {
   for (const name of SCRAMJET_DB_NAMES) {
     await deleteDatabase(name);
   }
+
   clearScramjetStorageKeys();
 }
 
@@ -279,6 +287,9 @@ async function hardResetProxyStorage() {
     const names = await caches.keys();
     await Promise.all(names.map((name) => caches.delete(name)));
   }
+
+  localStorage.clear();
+  sessionStorage.clear();
 
   window.location.href = `/reset?from=client&v=${ASSET_VERSION}`;
 }
@@ -302,9 +313,9 @@ async function ensureTransport() {
 }
 
 async function ensureServiceWorker() {
-  if (swReadyPromise) return swReadyPromise;
+  if (serviceWorkerReadyPromise) return serviceWorkerReadyPromise;
 
-  swReadyPromise = (async () => {
+  serviceWorkerReadyPromise = (async () => {
     if (!("serviceWorker" in navigator)) {
       throw new Error("Service workers are not supported.");
     }
@@ -313,11 +324,12 @@ async function ensureServiceWorker() {
       scope: "/",
       updateViaCache: "none"
     });
+
     await registration.update();
     await navigator.serviceWorker.ready;
   })();
 
-  return swReadyPromise;
+  return serviceWorkerReadyPromise;
 }
 
 async function getScramjet() {
@@ -348,31 +360,34 @@ async function getScramjet() {
   return scramjetReadyPromise;
 }
 
-function resetInitState() {
-  swReadyPromise = undefined;
-  transportReadyPromise = undefined;
-  scramjetReadyPromise = undefined;
-  proxyReadyPromise = undefined;
-  scramjetFrame = undefined;
-  window.__scramjetInstance = undefined;
-}
-
 async function initScramjet() {
   await ensureTransport();
   await getScramjet();
   await ensureServiceWorker();
 }
 
+function resetInitState() {
+  serviceWorkerReadyPromise = null;
+  transportReadyPromise = null;
+  scramjetReadyPromise = null;
+  proxyReadyPromise = null;
+  scramjetFrame = null;
+  window.__scramjetInstance = undefined;
+}
+
 async function ensureProxyReady() {
   if (!proxyReadyPromise) {
     proxyReadyPromise = initScramjet().catch(async (error) => {
       if (hasInitRetried) throw error;
+
       hasInitRetried = true;
       await resetScramjetStorage();
+
       const registrations = await navigator.serviceWorker.getRegistrations();
       for (const registration of registrations) {
         await registration.unregister();
       }
+
       resetInitState();
       return initScramjet();
     });
@@ -395,42 +410,37 @@ async function navigate(inputValue, engineTemplate = getEngineById(selectedEngin
   }
 
   scramjetFrame.go(target);
-  proxyFrame.src = scramjetFrame.frame.src;
-  addressInput.value = target;
+  const proxiedUrl = scramjetFrame.frame.src;
+  proxyFrame.src = proxiedUrl;
+
+  urlInput.value = inputValue.trim();
   syncSpotlightState();
   devLog(`[perf] Navigation ${(performance.now() - t0).toFixed(1)}ms`, target);
 }
 
-function moveChipFocus(step) {
-  const chips = Array.from(engineRow.querySelectorAll(".engine-chip"));
-  if (!chips.length) return;
-
-  chipFocusIndex = chipFocusIndex < 0 ? 0 : (chipFocusIndex + step + chips.length) % chips.length;
-  chips[chipFocusIndex].focus();
-}
-
-function shouldHandleVerticalArrow(event) {
-  const caret = addressInput.selectionStart ?? 0;
-  const selectionEnd = addressInput.selectionEnd ?? 0;
-  const valueLength = addressInput.value.length;
-  const hasSelection = selectionEnd !== caret;
-  if (event.metaKey || event.ctrlKey || event.altKey || hasSelection) return true;
-  if (valueLength === 0) return true;
-  return caret === 0 || caret === valueLength;
-}
-
 function handleGlobalKeys(event) {
   const cmdOrCtrl = event.metaKey || event.ctrlKey;
+
   if (cmdOrCtrl && event.key.toLowerCase() === "l") {
     event.preventDefault();
     openSpotlight({ focus: true });
-    addressInput.select();
+    return;
+  }
+
+  if (event.key === "Escape") {
+    if (urlInput.value.trim()) {
+      urlInput.value = "";
+      syncSpotlightState();
+      return;
+    }
+
+    closeSpotlight({ force: true });
     return;
   }
 
   if (event.key === "ArrowDown") {
-    const isInputFocused = document.activeElement === addressInput;
-    if (!isInputFocused || !isOpen || shouldHandleVerticalArrow(event)) {
+    const isInputFocused = document.activeElement === urlInput;
+    if (!isInputFocused || !spotlightShell.classList.contains("is-open")) {
       event.preventDefault();
       openSpotlight({ focus: true });
     }
@@ -438,43 +448,74 @@ function handleGlobalKeys(event) {
   }
 
   if (event.key === "ArrowUp") {
-    const isInputFocused = document.activeElement === addressInput;
-    if (!isInputFocused || !isOpen || !addressInput.value.trim() || shouldHandleVerticalArrow(event)) {
+    const isInputFocused = document.activeElement === urlInput;
+    if (!isInputFocused || !urlInput.value.trim()) {
       event.preventDefault();
       closeSpotlight({ force: true });
     }
-    return;
-  }
-
-  if (event.key === "Escape") {
-    if (document.activeElement === addressInput && addressInput.value.trim()) {
-      addressInput.value = "";
-      syncSpotlightState();
-      return;
-    }
-
-    closeSpotlight({ force: true });
   }
 }
 
 function onMouseMove(event) {
-  if (revealRaf) return;
-  revealRaf = requestAnimationFrame(() => {
-    revealRaf = 0;
-    if (event.clientY <= 72 && spotlightShell.classList.contains("is-hidden")) {
-      spotlightShell.classList.remove("is-hidden");
-    }
+  if (event.clientY > 72 || !spotlightShell.classList.contains("is-hidden") || revealQueued) return;
+
+  revealQueued = true;
+  requestAnimationFrame(() => {
+    revealQueued = false;
+    spotlightShell.classList.remove("is-hidden");
   });
 }
 
 function bindEvents() {
-  if (didBindEvents) return;
-  didBindEvents = true;
+  searchForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    if (event.submitter === saveCustomEngineBtn) {
+      const name = customEngineName.value.trim();
+      const template = customEngineTemplate.value.trim();
+      const validationError = validateEngineInput(name, template);
+
+      if (validationError) {
+        customEditorError.textContent = validationError;
+        return;
+      }
+
+      const entry = {
+        id: `custom-${Date.now()}`,
+        name,
+        template
+      };
+
+      engineState.custom.push(entry);
+      engineState.defaultEngineId = entry.id;
+      selectedEngineId = entry.id;
+      persistEngineState();
+      renderEngineChips();
+      closeCustomEditor();
+      urlInput.focus({ preventScroll: true });
+      return;
+    }
+
+    try {
+      await navigate(urlInput.value);
+      if (!urlInput.value.trim()) {
+        scheduleCollapse();
+      }
+    } catch (error) {
+      console.error(error);
+      urlInput.placeholder = "Unable to start proxy.";
+      openSpotlight({ focus: true });
+    }
+  });
 
   spotlightToggle.addEventListener("click", () => {
-    if (isOpen || isFocused || hasValue) {
+    const openLike =
+      spotlightShell.classList.contains("is-open") ||
+      spotlightShell.classList.contains("is-focused") ||
+      spotlightShell.classList.contains("is-typing");
+
+    if (openLike && !urlInput.value.trim()) {
       closeSpotlight({ force: true });
-      spotlightShell.classList.toggle("is-hidden", !hasValue);
       return;
     }
 
@@ -482,81 +523,31 @@ function bindEvents() {
     openSpotlight({ focus: true });
   });
 
-  navForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    try {
-      await navigate(addressInput.value);
-      closeSpotlight();
-    } catch (error) {
-      console.error(error);
-      addressInput.placeholder = "Unable to start proxy.";
-      openSpotlight({ focus: true });
-    }
-  });
-
-  addressInput.addEventListener("focus", () => {
-    setFocusedState(true);
+  urlInput.addEventListener("focus", () => {
     openSpotlight({ focus: false });
+    spotlightShell.classList.add("is-focused");
+    urlInput.select();
   });
 
-  addressInput.addEventListener("blur", () => {
-    setFocusedState(false);
+  urlInput.addEventListener("blur", () => {
+    spotlightShell.classList.remove("is-focused");
     scheduleCollapse();
   });
 
-  addressInput.addEventListener("input", () => {
+  urlInput.addEventListener("input", () => {
     openSpotlight({ focus: false });
     syncSpotlightState();
   });
 
-  addressInput.addEventListener("keydown", (event) => {
-    if (event.key === "Tab" && !event.shiftKey && isOpen) {
-      event.preventDefault();
-      moveChipFocus(1);
-      return;
-    }
-
-    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-      chipFocusIndex = -1;
-    }
-  });
-
   clearInput.addEventListener("click", () => {
-    addressInput.value = "";
+    urlInput.value = "";
     syncSpotlightState();
     openSpotlight({ focus: true });
   });
 
-  toggleCustomEditorBtn.addEventListener("click", () => {
-    if (customEngineEditor.hidden) openCustomEditor();
-    else closeCustomEditor();
-  });
-
-  cancelCustomEditorBtn.addEventListener("click", () => closeCustomEditor());
-
-  customEngineEditor.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const name = customEngineName.value.trim();
-    const template = customEngineTemplate.value.trim();
-    const validationError = validateEngineInput(name, template);
-
-    if (validationError) {
-      customEditorError.textContent = validationError;
-      return;
-    }
-
-    const entry = {
-      id: `custom-${Date.now()}`,
-      name,
-      template
-    };
-
-    engineState.custom.push(entry);
-    engineState.defaultEngineId = entry.id;
-    selectedEngineId = entry.id;
-    persistEngineState();
-    renderEngineChips();
+  cancelCustomEditorBtn.addEventListener("click", () => {
     closeCustomEditor();
+    urlInput.focus({ preventScroll: true });
   });
 
   retryInitBtn.addEventListener("click", async () => {
@@ -578,15 +569,22 @@ function bindEvents() {
     }
   });
 
-  window.addEventListener("keydown", handleGlobalKeys, { passive: false });
+  document.addEventListener("keydown", handleGlobalKeys, { passive: false });
   window.addEventListener("mousemove", onMouseMove, { passive: true });
 }
 
 async function boot() {
   parseEngineStorage();
   selectedEngineId = getEngineById(engineState.defaultEngineId).id;
+  engineState.defaultEngineId = selectedEngineId;
   renderEngineChips();
-  bindEvents();
+  syncSpotlightState();
+
+  if (!hasBoundEvents) {
+    bindEvents();
+    hasBoundEvents = true;
+  }
+
   closeSpotlight({ force: true });
 
   try {
