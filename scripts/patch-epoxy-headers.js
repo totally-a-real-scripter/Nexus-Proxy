@@ -12,7 +12,7 @@ const patchedBlock = `    try {\n      const normalizeHeaders = (inputHeaders) =
 
 const responseBlock = `      return {\n        body: res.body,\n        headers: headersEntries,\n        status: res.status,\n        statusText: res.statusText\n      };`;
 
-const responsePatch = `      const finalURL =\n        typeof res.url === "string" && res.url\n          ? res.url\n          : typeof remote?.href === "string"\n            ? remote.href\n            : String(remote ?? "");\n\n      return {\n        body: res.body,\n        headers: headersEntries,\n        status: res.status,\n        statusText: res.statusText,\n        finalURL,\n        url: finalURL\n      };`;
+const responsePatch = `      const rawHeaders = {};\n      for (let [key, value] of Object.entries(res.rawHeaders || {})) {\n        if (value == null) continue;\n\n        if (Array.isArray(value)) {\n          rawHeaders[key] = value.map((item) => String(item));\n        } else {\n          rawHeaders[key] = String(value);\n        }\n      }\n\n      const finalURL =\n        typeof res.url === "string" && res.url\n          ? res.url\n          : typeof remote?.href === "string"\n            ? remote.href\n            : String(remote ?? "");\n\n      return {\n        body: res.body,\n        headers: rawHeaders,\n        rawHeaders,\n        status: res.status,\n        statusText: res.statusText,\n        finalURL,\n        url: finalURL\n      };`;
 
 for (const target of targets) {
   if (!existsSync(target)) {
@@ -30,11 +30,16 @@ for (const target of targets) {
     patchedSource = patchedSource.replace(originalBlock, patchedBlock);
   }
 
-  if (!patchedSource.includes('statusText: res.statusText,\n        finalURL,')) {
-    if (!patchedSource.includes(responseBlock)) {
-      throw new Error(`[patch-epoxy-headers] unable to locate response return block in ${target}`);
+  if (!patchedSource.includes('rawHeaders,\n        status: res.status')) {
+    if (patchedSource.includes(responseBlock)) {
+      patchedSource = patchedSource.replace(responseBlock, responsePatch);
+    } else {
+      const headersEntriesBlock = `      let headersEntries = [];\n      for (let [key, value] of Object.entries(res.rawHeaders)) {\n        if (Array.isArray(value)) {\n          for (let v of value) {\n            headersEntries.push([key, v]);\n          }\n        } else {\n          headersEntries.push([key, value]);\n        }\n      }\n      const finalURL =\n        typeof res.url === "string" && res.url\n          ? res.url\n          : typeof remote?.href === "string"\n            ? remote.href\n            : String(remote ?? "");\n\n      return {\n        body: res.body,\n        headers: headersEntries,\n        status: res.status,\n        statusText: res.statusText,\n        finalURL,\n        url: finalURL\n      };`;
+      if (!patchedSource.includes(headersEntriesBlock)) {
+        throw new Error(`[patch-epoxy-headers] unable to locate response return block in ${target}`);
+      }
+      patchedSource = patchedSource.replace(headersEntriesBlock, responsePatch);
     }
-    patchedSource = patchedSource.replace(responseBlock, responsePatch);
   }
 
   if (patchedSource !== source) {
