@@ -1,6 +1,6 @@
 :root {
   color-scheme: dark;
-  --spotlight-width-collapsed: min(360px, calc(100vw - 32px));
+  --spotlight-width-collapsed: min(420px, calc(100vw - 32px));
   --spotlight-width-open: min(720px, calc(100vw - 32px));
   --spotlight-radius: 999px;
 
@@ -34,19 +34,28 @@ body {
 .proxy-frame {
   position: fixed;
   inset: 0;
+  z-index: 1;
   width: 100%;
   height: 100%;
   border: 0;
   background: #05070d;
 }
 
+html.debug-ui .spotlight-shell {
+  outline: 2px solid red;
+}
+
 .spotlight-shell {
   position: fixed;
   top: max(30px, env(safe-area-inset-top));
   left: 50%;
-  z-index: 9999;
-  width: var(--spotlight-width-collapsed);
+  z-index: 999999;
+  width: var(--spotlight-width-collapsed, min(420px, calc(100vw - 32px)));
+  min-width: 280px;
   transform: translateX(-50%);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
   transition: width 420ms cubic-bezier(.2, .9, .2, 1), transform 420ms cubic-bezier(.2, .9, .2, 1), opacity 220ms ease;
   will-change: width, transform, opacity;
 }
@@ -60,12 +69,17 @@ body {
 .spotlight-shell.is-hidden {
   transform: translate(-50%, -115%);
   opacity: 0.18;
+  pointer-events: auto;
 }
 
 .spotlight-panel {
+  display: block;
   position: relative;
   overflow: hidden;
   width: 100%;
+  min-height: 54px;
+  opacity: 1;
+  visibility: visible;
   border-radius: var(--spotlight-radius);
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.08)), var(--glass-bg);
   border: 1px solid var(--glass-border);
