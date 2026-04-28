@@ -1,46 +1,24 @@
 const WISP_PATH = "/wisp/";
-const ASSET_VERSION = "scramjet-10";
-console.log("[ui-debug] client.js loaded", new Date().toISOString());
-const STORAGE_KEY = "proxy.searchEngines.v1";
-const DEV =
-  window.location.hostname === "localhost" ||
-  window.location.hostname === "127.0.0.1" ||
-  window.location.search.includes("debug=1");
+const ASSET_VERSION = "scramjet-11";
 
 const SCRAMJET_DB_NAMES = ["$scramjet", "scramjet", "bare-mux", "baremux", "epoxy", "proxy-transports"];
 const SCRAMJET_STORAGE_KEYS = ["scramjet", "$scramjet", "bare-mux-path", "baremux"];
 
-const BUILTIN_ENGINES = [
-  { id: "google", name: "Google", template: "https://www.google.com/search?q={query}" },
-  { id: "youtube", name: "YouTube", template: "https://www.youtube.com/results?search_query={query}" },
-  { id: "duckduckgo", name: "DuckDuckGo", template: "https://duckduckgo.com/?q={query}" },
-  { id: "github", name: "GitHub", template: "https://github.com/search?q={query}" },
-  { id: "reddit", name: "Reddit", template: "https://www.reddit.com/search/?q={query}" },
-  { id: "wikipedia", name: "Wikipedia", template: "https://en.wikipedia.org/wiki/Special:Search?search={query}" }
-];
-
 const spotlightShell = document.getElementById("spotlightShell");
-const spotlightToggle = document.getElementById("spotlightToggle");
 const searchForm = document.getElementById("searchForm");
 const urlInput = document.getElementById("urlInput");
-const clearInput = document.getElementById("clearInput");
 const proxyFrame = document.getElementById("proxyFrame");
-const engineRow = document.getElementById("engineRow");
-const customEngineEditor = document.getElementById("customEngineEditor");
-const customEngineName = document.getElementById("customEngineName");
-const customEngineTemplate = document.getElementById("customEngineTemplate");
-const customEditorError = document.getElementById("customEditorError");
-const cancelCustomEditorBtn = document.getElementById("cancelCustomEditor");
-const saveCustomEngineBtn = document.getElementById("saveCustomEngine");
+const spotlightToggle = document.getElementById("spotlightToggle");
+const clearInput = document.getElementById("clearInput");
 const resetPanel = document.getElementById("resetPanel");
 const retryInitBtn = document.getElementById("retryInitBtn");
 const resetProxyStorageBtn = document.getElementById("resetProxyStorageBtn");
+
 const requiredElements = {
   spotlightShell,
   searchForm,
   urlInput,
   proxyFrame,
-  engineRow,
   spotlightToggle,
   clearInput
 };
@@ -51,287 +29,15 @@ for (const [name, element] of Object.entries(requiredElements)) {
   }
 }
 
-if (spotlightShell) {
-  spotlightShell.classList.remove("is-hidden");
-  spotlightShell.classList.add("is-open");
-}
-
 let collapseTimer = null;
+let hasBoundEvents = false;
 let proxyReadyPromise = null;
 let serviceWorkerReadyPromise = null;
 let transportReadyPromise = null;
 let scramjetReadyPromise = null;
-let hasBoundEvents = false;
 let hasInitRetried = false;
-let navToken = 0;
-let selectedEngineId = "google";
-let revealQueued = false;
-let scramjetFrame = null;
 
-const engineState = {
-  defaultEngineId: "google",
-  custom: []
-};
-
-function devLog(...args) {
-  if (DEV) console.info(...args);
-}
-
-function parseEngineStorage() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
-
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object") {
-      if (typeof parsed.defaultEngineId === "string") {
-        engineState.defaultEngineId = parsed.defaultEngineId;
-      }
-
-      if (Array.isArray(parsed.custom)) {
-        engineState.custom = parsed.custom.filter(
-          (engine) =>
-            engine &&
-            typeof engine.id === "string" &&
-            typeof engine.name === "string" &&
-            typeof engine.template === "string"
-        );
-      }
-    }
-  } catch (error) {
-    console.warn("Unable to parse search engine storage.", error);
-  }
-}
-
-function persistEngineState() {
-  try {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        defaultEngineId: engineState.defaultEngineId,
-        custom: engineState.custom
-      })
-    );
-  } catch (error) {
-    console.warn("Unable to save search engine settings.", error);
-  }
-}
-
-function getEngines() {
-  return [...BUILTIN_ENGINES, ...engineState.custom];
-}
-
-function getEngineById(id) {
-  return getEngines().find((engine) => engine.id === id) || BUILTIN_ENGINES[0];
-}
-
-function syncSpotlightState() {
-  const hasValue = !!urlInput.value.trim();
-  spotlightShell.classList.toggle("has-value", hasValue);
-  spotlightShell.classList.toggle("is-typing", hasValue);
-}
-
-function openSpotlight({ focus = true } = {}) {
-  clearTimeout(collapseTimer);
-  spotlightShell.classList.remove("is-hidden", "is-collapsed");
-  spotlightShell.classList.add("is-open");
-  spotlightToggle.setAttribute("aria-expanded", "true");
-
-  if (focus) {
-    requestAnimationFrame(() => {
-      urlInput.focus({ preventScroll: true });
-      urlInput.select();
-    });
-  }
-}
-
-function closeSpotlight({ force = false } = {}) {
-  if (!force && urlInput.value.trim()) return;
-
-  spotlightShell.classList.remove("is-open", "is-focused", "is-typing");
-  spotlightShell.classList.add("is-collapsed");
-  spotlightToggle.setAttribute("aria-expanded", "false");
-  urlInput.blur();
-}
-
-function scheduleCollapse() {
-  clearTimeout(collapseTimer);
-
-  collapseTimer = setTimeout(() => {
-    if (document.activeElement !== urlInput && !urlInput.value.trim()) {
-      closeSpotlight({ force: true });
-    }
-  }, 2000);
-}
-
-function initUI() {
-  spotlightShell.classList.remove("is-hidden", "is-collapsed");
-  spotlightShell.classList.add("is-open");
-  spotlightToggle.setAttribute("aria-expanded", "true");
-  syncSpotlightState();
-  spotlightShell.style.display = "block";
-  spotlightShell.style.visibility = "visible";
-  spotlightShell.style.opacity = "1";
-
-  requestAnimationFrame(() => {
-    urlInput.focus({ preventScroll: true });
-  });
-}
-
-function runVisibilityDiagnostics() {
-  console.log("[ui-debug] DOMContentLoaded");
-
-  const shell = document.getElementById("spotlightShell");
-  const form = document.getElementById("searchForm");
-  const input = document.getElementById("urlInput");
-  const frame = document.getElementById("proxyFrame");
-
-  console.log("[ui-debug] elements", {
-    shell: !!shell,
-    form: !!form,
-    input: !!input,
-    frame: !!frame
-  });
-
-  if (!shell) {
-    const emergency = document.createElement("div");
-    emergency.id = "spotlightShell";
-    emergency.innerHTML = `
-      <form id="searchForm">
-        <input id="urlInput" placeholder="Emergency Search Visible" />
-      </form>
-    `;
-    document.body.appendChild(emergency);
-    console.error("[ui-debug] spotlightShell was missing, emergency UI inserted");
-  }
-
-  const actualShell = document.getElementById("spotlightShell");
-  Object.assign(actualShell.style, {
-    position: "fixed",
-    top: "40px",
-    left: "50%",
-    transform: "translateX(-50%)",
-    zIndex: "2147483647",
-    width: "520px",
-    maxWidth: "calc(100vw - 32px)",
-    minHeight: "70px",
-    display: "block",
-    visibility: "visible",
-    opacity: "1",
-    pointerEvents: "auto",
-    background: "rgba(255,0,0,.35)",
-    outline: "4px solid red"
-  });
-
-  const rect = actualShell.getBoundingClientRect();
-  const style = getComputedStyle(actualShell);
-  console.log("[ui-debug] shell rect/style", {
-    rect: {
-      x: rect.x,
-      y: rect.y,
-      width: rect.width,
-      height: rect.height,
-      top: rect.top,
-      left: rect.left
-    },
-    display: style.display,
-    visibility: style.visibility,
-    opacity: style.opacity,
-    zIndex: style.zIndex,
-    position: style.position,
-    transform: style.transform
-  });
-}
-
-function openCustomEditor() {
-  customEngineEditor.hidden = false;
-  customEditorError.textContent = "";
-  openSpotlight({ focus: false });
-  customEngineName.focus({ preventScroll: true });
-}
-
-function closeCustomEditor() {
-  customEngineEditor.hidden = true;
-  customEditorError.textContent = "";
-  customEngineName.value = "";
-  customEngineTemplate.value = "";
-}
-
-function deleteCustomEngine(engineId) {
-  engineState.custom = engineState.custom.filter((engine) => engine.id !== engineId);
-
-  if (selectedEngineId === engineId) {
-    selectedEngineId = "google";
-    engineState.defaultEngineId = "google";
-  }
-
-  persistEngineState();
-  renderEngineChips();
-}
-
-function renderEngineChips() {
-  engineRow.textContent = "";
-
-  for (const engine of getEngines()) {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "engine-chip";
-    chip.dataset.engineId = engine.id;
-    chip.textContent = engine.name;
-
-    if (engine.id === selectedEngineId) {
-      chip.classList.add("active");
-      chip.setAttribute("aria-current", "true");
-    }
-
-    chip.addEventListener("click", () => {
-      selectedEngineId = engine.id;
-      engineState.defaultEngineId = engine.id;
-      persistEngineState();
-      renderEngineChips();
-      if (urlInput.value.trim()) {
-        void navigate(urlInput.value, engine.template);
-      }
-    });
-
-    if (engine.id.startsWith("custom-")) {
-      const removeBtn = document.createElement("button");
-      removeBtn.type = "button";
-      removeBtn.className = "engine-chip engine-delete";
-      removeBtn.textContent = "×";
-      removeBtn.setAttribute("aria-label", `Delete ${engine.name}`);
-      removeBtn.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        deleteCustomEngine(engine.id);
-      });
-      chip.appendChild(removeBtn);
-    }
-
-    engineRow.appendChild(chip);
-  }
-
-  const addChip = document.createElement("button");
-  addChip.type = "button";
-  addChip.className = "engine-chip engine-add";
-  addChip.textContent = "+ Add";
-  addChip.setAttribute("aria-label", "Add custom search engine");
-  addChip.addEventListener("click", openCustomEditor);
-  engineRow.appendChild(addChip);
-}
-
-function validateEngineInput(name, template) {
-  if (!name.trim()) return "Name is required.";
-  if (!template.startsWith("https://")) return "Template must start with https://.";
-  if (!template.includes("{query}")) return "Template must include {query}.";
-
-  const duplicate = getEngines().some((engine) => engine.name.toLowerCase() === name.trim().toLowerCase());
-  if (duplicate) return "Engine name already exists.";
-
-  return "";
-}
-
-function normalizeInput(raw, engineTemplate) {
+function normalizeInput(raw) {
   const value = raw.trim();
 
   if (!value) {
@@ -346,7 +52,51 @@ function normalizeInput(raw, engineTemplate) {
     return new URL(`https://${value}`).href;
   }
 
-  return engineTemplate.replace("{query}", encodeURIComponent(value));
+  return `https://www.google.com/search?q=${encodeURIComponent(value)}`;
+}
+
+function syncSpotlightState() {
+  const hasValue = !!urlInput.value.trim();
+
+  spotlightShell.classList.toggle("has-value", hasValue);
+  spotlightShell.classList.toggle("is-typing", hasValue);
+}
+
+function openSpotlight({ focus = true } = {}) {
+  clearTimeout(collapseTimer);
+  spotlightShell.classList.remove("is-hidden");
+  spotlightShell.classList.add("is-open");
+
+  if (focus) {
+    requestAnimationFrame(() => {
+      urlInput.focus();
+      urlInput.select();
+    });
+  }
+}
+
+function closeSpotlight({ force = false } = {}) {
+  if (!force && urlInput.value.trim()) return;
+
+  spotlightShell.classList.remove("is-open", "is-focused", "is-typing");
+  urlInput.blur();
+}
+
+function scheduleCollapse() {
+  clearTimeout(collapseTimer);
+
+  collapseTimer = setTimeout(() => {
+    if (document.activeElement !== urlInput && !urlInput.value.trim()) {
+      closeSpotlight({ force: true });
+    }
+  }, 2000);
+}
+
+function clearScramjetStorageKeys() {
+  for (const key of SCRAMJET_STORAGE_KEYS) {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+  }
 }
 
 async function deleteDatabase(name) {
@@ -360,13 +110,6 @@ async function deleteDatabase(name) {
   });
 }
 
-function clearScramjetStorageKeys() {
-  for (const key of SCRAMJET_STORAGE_KEYS) {
-    localStorage.removeItem(key);
-    sessionStorage.removeItem(key);
-  }
-}
-
 async function resetScramjetStorage() {
   for (const name of SCRAMJET_DB_NAMES) {
     await deleteDatabase(name);
@@ -375,23 +118,12 @@ async function resetScramjetStorage() {
   clearScramjetStorageKeys();
 }
 
-async function hardResetProxyStorage() {
-  const registrations = await navigator.serviceWorker.getRegistrations();
-  for (const registration of registrations) {
-    await registration.unregister();
-  }
-
-  await resetScramjetStorage();
-
-  if ("caches" in window) {
-    const names = await caches.keys();
-    await Promise.all(names.map((name) => caches.delete(name)));
-  }
-
-  localStorage.clear();
-  sessionStorage.clear();
-
-  window.location.href = `/reset?from=client&v=${ASSET_VERSION}`;
+function resetInitState() {
+  serviceWorkerReadyPromise = null;
+  transportReadyPromise = null;
+  scramjetReadyPromise = null;
+  proxyReadyPromise = null;
+  window.__scramjetInstance = undefined;
 }
 
 async function ensureTransport() {
@@ -441,7 +173,6 @@ async function getScramjet() {
       throw new Error("Scramjet controller unavailable.");
     }
 
-    const t0 = performance.now();
     const { ScramjetController } = window.$scramjetLoadController();
     const scramjet = new ScramjetController({
       files: {
@@ -452,7 +183,6 @@ async function getScramjet() {
     });
 
     await scramjet.init();
-    devLog(`[perf] Scramjet init ${(performance.now() - t0).toFixed(1)}ms`);
     window.__scramjetInstance = scramjet;
     return scramjet;
   })();
@@ -464,15 +194,6 @@ async function initScramjet() {
   await ensureTransport();
   await getScramjet();
   await ensureServiceWorker();
-}
-
-function resetInitState() {
-  serviceWorkerReadyPromise = null;
-  transportReadyPromise = null;
-  scramjetReadyPromise = null;
-  proxyReadyPromise = null;
-  scramjetFrame = null;
-  window.__scramjetInstance = undefined;
 }
 
 async function ensureProxyReady() {
@@ -496,137 +217,29 @@ async function ensureProxyReady() {
   return proxyReadyPromise;
 }
 
-async function navigate(inputValue, engineTemplate = getEngineById(selectedEngineId).template) {
-  const token = ++navToken;
-  const t0 = performance.now();
-  const target = normalizeInput(inputValue, engineTemplate);
-
+async function createScramjetUrl(target) {
   await ensureProxyReady();
-  if (token !== navToken) return;
-
   const scramjet = await getScramjet();
-  if (!scramjetFrame) {
-    scramjetFrame = scramjet.createFrame(proxyFrame);
-  }
+  const frame = scramjet.createFrame(proxyFrame);
+  frame.go(target);
+  return frame.frame.src;
+}
 
-  scramjetFrame.go(target);
-  const proxiedUrl = scramjetFrame.frame.src;
+async function navigate(inputValue) {
+  const target = normalizeInput(inputValue);
+  const proxiedUrl = await createScramjetUrl(target);
   proxyFrame.src = proxiedUrl;
-
   urlInput.value = inputValue.trim();
   syncSpotlightState();
-  devLog(`[perf] Navigation ${(performance.now() - t0).toFixed(1)}ms`, target);
 }
 
-function handleGlobalKeys(event) {
-  const cmdOrCtrl = event.metaKey || event.ctrlKey;
-
-  if (cmdOrCtrl && event.key.toLowerCase() === "l") {
-    event.preventDefault();
-    openSpotlight({ focus: true });
-    return;
-  }
-
-  if (event.key === "Escape") {
-    if (urlInput.value.trim()) {
-      urlInput.value = "";
-      syncSpotlightState();
-      return;
-    }
-
-    closeSpotlight({ force: true });
-    return;
-  }
-
-  if (event.key === "ArrowDown") {
-    const isInputFocused = document.activeElement === urlInput;
-    if (!isInputFocused || !spotlightShell.classList.contains("is-open")) {
-      event.preventDefault();
-      openSpotlight({ focus: true });
-    }
-    return;
-  }
-
-  if (event.key === "ArrowUp") {
-    const isInputFocused = document.activeElement === urlInput;
-    if (!isInputFocused || !urlInput.value.trim()) {
-      event.preventDefault();
-      closeSpotlight({ force: true });
-    }
-  }
-}
-
-function onMouseMove(event) {
-  if (event.clientY > 72 || !spotlightShell.classList.contains("is-hidden") || revealQueued) return;
-
-  revealQueued = true;
-  requestAnimationFrame(() => {
-    revealQueued = false;
-    spotlightShell.classList.remove("is-hidden");
-  });
-}
-
-function bindEvents() {
-  searchForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-
-    if (event.submitter === saveCustomEngineBtn) {
-      const name = customEngineName.value.trim();
-      const template = customEngineTemplate.value.trim();
-      const validationError = validateEngineInput(name, template);
-
-      if (validationError) {
-        customEditorError.textContent = validationError;
-        return;
-      }
-
-      const entry = {
-        id: `custom-${Date.now()}`,
-        name,
-        template
-      };
-
-      engineState.custom.push(entry);
-      engineState.defaultEngineId = entry.id;
-      selectedEngineId = entry.id;
-      persistEngineState();
-      renderEngineChips();
-      closeCustomEditor();
-      urlInput.focus({ preventScroll: true });
-      return;
-    }
-
-    try {
-      await navigate(urlInput.value);
-      if (!urlInput.value.trim()) {
-        scheduleCollapse();
-      }
-    } catch (error) {
-      console.error(error);
-      urlInput.placeholder = "Unable to start proxy.";
-      openSpotlight({ focus: true });
-    }
-  });
-
-  spotlightToggle.addEventListener("click", () => {
-    const openLike =
-      spotlightShell.classList.contains("is-open") ||
-      spotlightShell.classList.contains("is-focused") ||
-      spotlightShell.classList.contains("is-typing");
-
-    if (openLike && !urlInput.value.trim()) {
-      closeSpotlight({ force: true });
-      return;
-    }
-
-    spotlightShell.classList.remove("is-hidden");
-    openSpotlight({ focus: true });
-  });
+function bindUIEvents() {
+  if (hasBoundEvents) return;
+  hasBoundEvents = true;
 
   urlInput.addEventListener("focus", () => {
-    openSpotlight({ focus: false });
-    spotlightShell.classList.add("is-focused");
-    urlInput.select();
+    spotlightShell.classList.add("is-focused", "is-open");
+    requestAnimationFrame(() => urlInput.select());
   });
 
   urlInput.addEventListener("blur", () => {
@@ -634,10 +247,7 @@ function bindEvents() {
     scheduleCollapse();
   });
 
-  urlInput.addEventListener("input", () => {
-    openSpotlight({ focus: false });
-    syncSpotlightState();
-  });
+  urlInput.addEventListener("input", syncSpotlightState);
 
   clearInput.addEventListener("click", () => {
     urlInput.value = "";
@@ -645,12 +255,66 @@ function bindEvents() {
     openSpotlight({ focus: true });
   });
 
-  cancelCustomEditorBtn.addEventListener("click", () => {
-    closeCustomEditor();
-    urlInput.focus({ preventScroll: true });
+  spotlightToggle.addEventListener("click", () => {
+    const isOpen =
+      spotlightShell.classList.contains("is-open") ||
+      spotlightShell.classList.contains("is-focused") ||
+      spotlightShell.classList.contains("is-typing");
+
+    if (isOpen && !urlInput.value.trim()) {
+      closeSpotlight({ force: true });
+    } else {
+      openSpotlight({ focus: true });
+    }
   });
 
-  retryInitBtn.addEventListener("click", async () => {
+  searchForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    try {
+      await navigate(urlInput.value);
+      scheduleCollapse();
+    } catch (error) {
+      console.error("[navigate] failed", error);
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    const isMac = navigator.platform.toLowerCase().includes("mac");
+
+    if ((isMac ? event.metaKey : event.ctrlKey) && event.key.toLowerCase() === "l") {
+      event.preventDefault();
+      openSpotlight({ focus: true });
+      return;
+    }
+
+    if (event.key === "Escape") {
+      if (urlInput.value.trim()) {
+        urlInput.value = "";
+        syncSpotlightState();
+      } else {
+        closeSpotlight({ force: true });
+      }
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      if (document.activeElement !== urlInput || spotlightShell.classList.contains("is-hidden")) {
+        event.preventDefault();
+        openSpotlight({ focus: true });
+      }
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      if (document.activeElement !== urlInput || !urlInput.value.trim()) {
+        event.preventDefault();
+        closeSpotlight({ force: true });
+      }
+    }
+  });
+
+  retryInitBtn?.addEventListener("click", async () => {
     try {
       resetPanel.hidden = true;
       resetInitState();
@@ -661,61 +325,34 @@ function bindEvents() {
     }
   });
 
-  resetProxyStorageBtn.addEventListener("click", async () => {
-    try {
-      await hardResetProxyStorage();
-    } catch (error) {
-      console.error("Hard reset failed.", error);
-    }
+  resetProxyStorageBtn?.addEventListener("click", async () => {
+    window.location.href = `/reset?from=client&v=${ASSET_VERSION}`;
   });
-
-  document.addEventListener("keydown", handleGlobalKeys, { passive: false });
-  window.addEventListener("mousemove", onMouseMove, { passive: true });
 }
 
-async function boot() {
-  parseEngineStorage();
-  selectedEngineId = getEngineById(engineState.defaultEngineId).id;
-  engineState.defaultEngineId = selectedEngineId;
-  renderEngineChips();
+function initUI() {
+  spotlightShell.classList.remove("is-hidden");
+  spotlightShell.classList.add("is-open");
   syncSpotlightState();
+  bindUIEvents();
 
-  if (!hasBoundEvents) {
-    bindEvents();
-    hasBoundEvents = true;
-  }
-
-  initUI();
+  requestAnimationFrame(() => {
+    urlInput.focus();
+  });
 }
 
 function initProxyInBackground() {
   ensureProxyReady().catch((error) => {
     console.error("[proxy] background init failed", error);
-    resetPanel.hidden = false;
+    if (resetPanel) resetPanel.hidden = false;
   });
 }
 
 document.addEventListener("DOMContentLoaded", () => {
   try {
-    runVisibilityDiagnostics();
-    void boot();
+    initUI();
     initProxyInBackground();
   } catch (error) {
     console.error("[fatal client startup error]", error);
-    const emergency = document.createElement("div");
-    emergency.style.cssText = `
-      position: fixed;
-      top: 40px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 2147483647;
-      background: red;
-      color: white;
-      padding: 20px;
-      border-radius: 16px;
-      font: 16px system-ui;
-    `;
-    emergency.textContent = "Client JS crashed before UI init. Check console.";
-    document.body.appendChild(emergency);
   }
 });
