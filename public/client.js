@@ -1,5 +1,5 @@
 const WISP_PATH = "/wisp/";
-const ASSET_VERSION = "scramjet-8";
+const ASSET_VERSION = "scramjet-9";
 const STORAGE_KEY = "proxy.searchEngines.v1";
 const DEV =
   window.location.hostname === "localhost" ||
@@ -34,6 +34,26 @@ const saveCustomEngineBtn = document.getElementById("saveCustomEngine");
 const resetPanel = document.getElementById("resetPanel");
 const retryInitBtn = document.getElementById("retryInitBtn");
 const resetProxyStorageBtn = document.getElementById("resetProxyStorageBtn");
+const requiredElements = {
+  spotlightShell,
+  searchForm,
+  urlInput,
+  proxyFrame,
+  engineRow,
+  spotlightToggle,
+  clearInput
+};
+
+for (const [name, element] of Object.entries(requiredElements)) {
+  if (!element) {
+    console.error(`[ui] Missing required element: ${name}`);
+  }
+}
+
+if (spotlightShell) {
+  spotlightShell.classList.remove("is-hidden");
+  spotlightShell.classList.add("is-open");
+}
 
 let collapseTimer = null;
 let proxyReadyPromise = null;
@@ -141,6 +161,17 @@ function scheduleCollapse() {
       closeSpotlight({ force: true });
     }
   }, 2000);
+}
+
+function initUI() {
+  spotlightShell.classList.remove("is-hidden", "is-collapsed");
+  spotlightShell.classList.add("is-open");
+  spotlightToggle.setAttribute("aria-expanded", "true");
+  syncSpotlightState();
+
+  requestAnimationFrame(() => {
+    urlInput.focus({ preventScroll: true });
+  });
 }
 
 function openCustomEditor() {
@@ -585,7 +616,7 @@ async function boot() {
     hasBoundEvents = true;
   }
 
-  closeSpotlight({ force: true });
+  initUI();
 
   try {
     await ensureProxyReady();
