@@ -19,6 +19,8 @@ const HOST = "0.0.0.0";
 const PORT = Number.parseInt(process.env.PORT || "9876", 10) || 9876;
 const WISP_ENDPOINT = "/wisp/";
 const SCRAMJET_ROUTE = "/scram/";
+const SCRAMJET_DB_NAMES = ["$scramjet"];
+const SCRAMJET_STORAGE_KEYS = ["scramjet", "$scramjet"];
 
 const app = express();
 app.set("trust proxy", 1);
@@ -32,16 +34,16 @@ app.use((_, res, next) => {
 
 app.use(compression());
 
-app.get("/health", (_req, res) => {
-  res.json({ status: "alive" });
-});
-
 const setNoStoreHeaders = (res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
   res.setHeader("Surrogate-Control", "no-store");
 };
+
+app.get("/health", (_req, res) => {
+  res.json({ status: "alive" });
+});
 
 app.get("/client.js", (_req, res) => {
   setNoStoreHeaders(res);
@@ -51,6 +53,73 @@ app.get("/client.js", (_req, res) => {
 app.get("/sw.js", (_req, res) => {
   setNoStoreHeaders(res);
   res.sendFile(join(__dirname, "public", "sw.js"));
+});
+
+app.get("/reset", (_req, res) => {
+  setNoStoreHeaders(res);
+  res.type("html").send(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Reset Proxy Storage</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 24px; color: #111; }
+      code { background: #f1f3f5; padding: 2px 6px; border-radius: 6px; }
+    </style>
+  </head>
+  <body>
+    <h1>Resetting proxy storage...</h1>
+    <p id="status">Please wait.</p>
+    <script>
+      const dbNames = ${JSON.stringify(SCRAMJET_DB_NAMES)};
+      const storageKeys = ${JSON.stringify(SCRAMJET_STORAGE_KEYS)};
+
+      async function deleteDatabase(name) {
+        if (!("indexedDB" in window)) return false;
+        return new Promise((resolve) => {
+          const request = indexedDB.deleteDatabase(name);
+          request.onsuccess = () => resolve(true);
+          request.onerror = () => resolve(false);
+          request.onblocked = () => resolve(false);
+        });
+      }
+
+      async function resetAll() {
+        const status = document.getElementById("status");
+
+        try {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          for (const registration of registrations) {
+            await registration.unregister();
+          }
+
+          if ("caches" in window) {
+            const cacheNames = await caches.keys();
+            await Promise.all(cacheNames.map((name) => caches.delete(name)));
+          }
+
+          for (const name of dbNames) {
+            await deleteDatabase(name);
+          }
+
+          for (const key of storageKeys) {
+            localStorage.removeItem(key);
+            sessionStorage.removeItem(key);
+          }
+
+          status.textContent = "Done. Redirecting...";
+          location.replace("/?reset=" + Date.now());
+        } catch (error) {
+          console.error(error);
+          status.textContent = "Reset failed. Clear site data manually, then reload /.";
+        }
+      }
+
+      resetAll();
+    </script>
+  </body>
+</html>`);
 });
 
 app.get(WISP_ENDPOINT, (_req, res) => {
@@ -65,8 +134,8 @@ app.use(
   express.static(scramjetPath, {
     maxAge: "1d",
     setHeaders: (res, filePath) => {
-      const basename = filePath.split("/").pop();
-      if (["scramjet.all.js", "scramjet.sync.js", "scramjet.wasm.wasm"].includes(basename || "")) {
+      const basename = filePath.split("/").pop() || "";
+      if (basename.startsWith("scramjet")) {
         setNoStoreHeaders(res);
       }
     }
