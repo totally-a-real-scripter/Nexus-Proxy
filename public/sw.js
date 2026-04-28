@@ -1,8 +1,21 @@
-const ASSET_VERSION = "scramjet-5";
+const ASSET_VERSION = "scramjet-6";
 importScripts(`/scram/scramjet.all.js?v=${ASSET_VERSION}`);
 
 const { ScramjetServiceWorker } = $scramjetLoadWorker();
 const scramjet = new ScramjetServiceWorker();
+
+const bypassSameOrigin = [
+  "/",
+  "/reset",
+  "/health",
+  "/client.js",
+  "/style.css",
+  "/favicon.ico",
+  "/sw.js",
+  "/robots.txt"
+];
+
+const bypassPrefixes = ["/scram/", "/baremux/", "/epoxy/", "/wisp/", "/assets/"];
 
 let configReadyPromise = null;
 
@@ -34,38 +47,69 @@ function storageErrorResponse() {
   );
 }
 
-function isInternalBypass(url) {
-  return (
-    url.pathname === "/" ||
-    url.pathname === "/reset" ||
-    url.pathname === "/health" ||
-    url.pathname === "/client.js" ||
-    url.pathname === "/style.css" ||
-    url.pathname === "/favicon.ico" ||
-    url.pathname === "/sw.js" ||
-    url.pathname === "/robots.txt" ||
-    url.pathname.startsWith("/scram/") ||
-    url.pathname.startsWith("/baremux/") ||
-    url.pathname.startsWith("/epoxy/") ||
-    url.pathname.startsWith("/wisp/") ||
-    url.pathname.startsWith("/assets/")
-  );
-}
-
-function safeLogRequest(event) {
+function logScramjetRequest(event) {
   const request = event.request;
   const url = new URL(request.url);
-  console.debug("[scramjet-sw] route request", {
-    url: request.url,
+
+  console.debug("[scramjet-debug] before fetch", {
+    requestUrl: request.url,
     pathname: url.pathname,
+    search: url.search,
     method: request.method,
-    destination: request.destination,
     mode: request.mode,
-    credentials: request.credentials,
-    redirect: request.redirect,
-    referrer: request.referrer,
-    hasClientId: !!event.clientId
+    destination: request.destination || "",
+    referrer: request.referrer || "",
+    clientId: event.clientId || "",
+    resultingClientId: event.resultingClientId || ""
   });
+}
+
+function logScramjetResponse(event, response) {
+  console.debug("[scramjet-debug] after fetch", {
+    requestUrl: event.request.url,
+    status: response.status,
+    statusText: response.statusText,
+    type: response.type,
+    url: response.url || "",
+    redirected: response.redirected,
+    contentType: response.headers.get("content-type") || "",
+    contentDisposition: response.headers.get("content-disposition") || "",
+    location: response.headers.get("location") || ""
+  });
+}
+
+async function normalizeDocumentResponse(event, response) {
+  const destination = event.request.destination || "";
+  const contentType = response.headers.get("content-type") || "";
+
+  if (
+    (destination === "document" || destination === "iframe") &&
+    (!contentType || contentType.includes("text/plain"))
+  ) {
+    const text = await response.clone().text();
+
+    if (/^\s*<!doctype html|^\s*<html/i.test(text)) {
+      const headers = new Headers(response.headers);
+      headers.set("content-type", "text/html; charset=utf-8");
+      headers.delete("content-disposition");
+
+      return new Response(text, {
+        status: response.status,
+        statusText: response.statusText,
+        headers
+      });
+    }
+  }
+
+  return response;
+}
+
+function shouldBypass(url) {
+  return (
+    url.origin === location.origin &&
+    (bypassSameOrigin.includes(url.pathname) ||
+      bypassPrefixes.some((prefix) => url.pathname.startsWith(prefix)))
+  );
 }
 
 self.addEventListener("install", () => {
@@ -83,7 +127,7 @@ self.addEventListener("fetch", (event) => {
     (async () => {
       const url = new URL(event.request.url);
 
-      if (url.origin === location.origin && isInternalBypass(url)) {
+      if (shouldBypass(url)) {
         return fetch(event.request);
       }
 
@@ -91,31 +135,23 @@ self.addEventListener("fetch", (event) => {
         await ensureConfig();
 
         if (scramjet.route(event)) {
-          try {
-            safeLogRequest(event);
-            const response = await scramjet.fetch(event);
-            console.debug("[scramjet-sw] response returned", {
-              type: response && response.type,
-              status: response && response.status,
-              url: response && response.url,
-              redirected: response && response.redirected,
-              contentType: response?.headers?.get ? response.headers.get("content-type") ?? null : null
-            });
-            return response;
-          } catch (error) {
-            console.error("[scramjet-sw] scramjet.fetch failed", {
-              message: error && error.message,
-              stack: error && error.stack,
-              requestUrl: event.request && event.request.url,
-              destination: event.request && event.request.destination
-            });
-            throw error;
-          }
+          logScramjetRequest(event);
+
+          const response = await scramjet.fetch(event);
+          logScramjetResponse(event, response);
+
+          return await normalizeDocumentResponse(event, response);
         }
 
         return await fetch(event.request);
       } catch (error) {
-        console.error("Scramjet fetch handler failed:", error);
+        console.error("[scramjet-debug] fetch failed", {
+          message: error.message,
+          stack: error.stack,
+          requestUrl: event.request.url,
+          pathname: new URL(event.request.url).pathname,
+          destination: event.request.destination || ""
+        });
 
         if (event.request.mode === "navigate") {
           return storageErrorResponse();
