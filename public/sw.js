@@ -1,4 +1,4 @@
-const ASSET_VERSION = "scramjet-3";
+const ASSET_VERSION = "scramjet-4";
 importScripts(`/scram/scramjet.all.js?v=${ASSET_VERSION}`);
 
 const { ScramjetServiceWorker } = $scramjetLoadWorker();
