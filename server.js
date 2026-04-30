@@ -33,13 +33,13 @@ const RESET_DB_NAMES = [
   "BareMux",
   "epoxy",
   "Epoxy",
-  "proxy-transports",
-  "proxyTransport",
-  "proxy-transport"
+  "gateway-transports",
+  "gatewayTransport",
+  "gateway-transport"
 ];
 
 const app = express();
-app.set("trust proxy", 1);
+app.set("trust host", 1);
 app.disable("x-powered-by");
 
 app.use((_, res, next) => {
@@ -51,7 +51,7 @@ app.use((_, res, next) => {
 app.use(compression());
 
 const setNoStoreHeaders = (res) => {
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, must-revalidate");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
   res.setHeader("Surrogate-Control", "no-store");
@@ -88,7 +88,7 @@ app.get("/debug-ui", (_req, res) => {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Nexus Proxy UI Debug</title>
+    <title>Nexus Gateway UI Debug</title>
     <link rel="stylesheet" href="/style.css?v=scramjet-13" />
   </head>
   <body>
@@ -134,15 +134,15 @@ app.get("/reset", (_req, res) => {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Reset Proxy Storage</title>
+    <title>Reset App Storage</title>
     <style>
       body { font-family: system-ui, sans-serif; margin: 24px; color: #111; }
       code { background: #f1f3f5; padding: 2px 6px; border-radius: 6px; }
     </style>
   </head>
   <body>
-    <h1>Resetting proxy storage...</h1>
-    <p>Please wait while we clear proxy storage and service workers.</p>
+    <h1>Resetting site storage...</h1>
+    <p>Please wait while we clear site storage and service workers.</p>
     <pre id="status">Starting reset…</pre>
     <script>
       const status = document.getElementById("status");
@@ -180,7 +180,7 @@ app.get("/reset", (_req, res) => {
           try {
             const databases = await indexedDB.databases();
             for (const db of databases) {
-              if (db.name && /scram|bare|mux|epoxy|proxy|transport/i.test(db.name)) {
+              if (db.name && /scram|bare|mux|epoxy|gateway|transport/i.test(db.name)) {
                 dbNames.add(db.name);
               }
             }
@@ -208,7 +208,7 @@ app.get("/reset", (_req, res) => {
           logs.push("sessionStorage clear failed: " + String(error));
         }
 
-        status.textContent = "Proxy storage reset complete\\n\\n" + logs.join("\\n") + "\\n\\nReloading…";
+        status.textContent = "Storage reset complete\\n\\n" + logs.join("\\n") + "\\n\\nReloading…";
         await new Promise((resolve) => setTimeout(resolve, 1200));
         location.replace("/?reset=" + Date.now());
       }
@@ -263,7 +263,7 @@ app.use((err, req, res, _next) => {
     stack: err?.stack || err
   });
 
-  res.status(500).send(`<!doctype html><html><head><title>Proxy Error</title></head><body><h1>Proxy Error</h1><p>Request failed while proxying <code>${req.originalUrl}</code>.</p></body></html>`);
+  res.status(500).send(`<!doctype html><html><head><title>Gateway Error</title></head><body><h1>Gateway Error</h1><p>Request failed while loading <code>${req.originalUrl}</code>.</p></body></html>`);
 });
 
 app.use((req, res) => {
@@ -295,7 +295,7 @@ const scramjetSanityFiles = ["scramjet.all.js", "scramjet.sync.js", "scramjet.wa
 
 server.listen(PORT, HOST, () => {
   console.log("======================================");
-  console.log("Nexus Proxy started");
+  console.log("Nexus Gateway started");
   console.log(`Environment : ${process.env.NODE_ENV || "development"}`);
   console.log(`Host        : ${HOST}`);
   console.log(`Port        : ${PORT}`);

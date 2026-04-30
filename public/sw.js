@@ -43,7 +43,7 @@ function shouldBypass(url) {
 
 function storageErrorResponse() {
   return new Response(
-    "<!doctype html><title>Proxy Error</title><h1>Proxy storage error</h1><p>Scramjet storage is stale or corrupted. Open <a href='/reset' target='_top'>Reset proxy storage</a> and reload.</p>",
+    "<!doctype html><title>Gateway Error</title><h1>Storage error</h1><p>Scramjet storage is stale or corrupted. Open <a href='/reset' target='_top'>Reset site storage</a> and reload.</p>",
     {
       status: 500,
       headers: {
