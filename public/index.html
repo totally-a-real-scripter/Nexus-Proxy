@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Nexus Proxy</title>
+    <title>Nexus Gateway</title>
     <link rel="stylesheet" href="/style.css?v=scramjet-13" />
     <script src="/baremux/index.js?v=scramjet-13"></script>
     <script src="/epoxy/index.js?v=scramjet-13"></script>
   </head>
   <body>
-    <iframe id="proxyFrame" class="proxy-frame" title="Proxied content" src="/home.html"></iframe>
+    <iframe id="contentFrame" class="content-frame" title="Remote content" src="/home.html"></iframe>
 
     <div id="spotlightShell" class="spotlight-shell is-open">
       <form id="searchForm" class="spotlight-panel" autocomplete="off">
@@ -50,11 +50,11 @@
     </nav>
 
     <section class="reset-panel" id="resetPanel" hidden>
-      <h2>Proxy startup failed</h2>
-      <p>Scramjet could not initialize. You can retry once or reset proxy storage.</p>
+      <h2>Startup failed</h2>
+      <p>Scramjet could not initialize. You can retry once or reset storage.</p>
       <div class="editor-actions">
         <button id="retryInitBtn" type="button">Retry</button>
-        <button id="resetProxyStorageBtn" type="button">Reset storage</button>
+        <button id="resetStorageBtn" type="button">Reset storage</button>
       </div>
     </section>
 

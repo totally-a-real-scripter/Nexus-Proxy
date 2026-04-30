@@ -1,6 +1,6 @@
-# Nexus Proxy (Scramjet)
+# Nexus Gateway (Scramjet)
 
-A browser-style proxy UI powered by **Scramjet + Bare-Mux + Epoxy + Wisp** with Express and Dockerfile-only deployment.
+A browser-style web UI powered by **Scramjet + Bare-Mux + Epoxy + Wisp** with Express and Dockerfile-only deployment.
 
 ## Stack
 
@@ -12,11 +12,11 @@ A browser-style proxy UI powered by **Scramjet + Bare-Mux + Epoxy + Wisp** with 
 
 ## Features
 
-- Full-screen proxy iframe with floating Spotlight-style search overlay
+- Full-screen browsing iframe with floating Spotlight-style search overlay
 - Toggle overlay with arrow button, `ArrowDown` (open), `ArrowUp` (hide), `Ctrl/Cmd+L` focus, `Esc` collapse/blur
 - Smart URL/search parsing
 - Built-in search engines (Google, YouTube, DuckDuckGo, GitHub, Reddit, Wikipedia)
-- User-defined custom search engines persisted in `localStorage` key `proxy.searchEngines.v1`
+- User-defined custom search engines persisted in `localStorage` key `nexus.searchEngines.v1`
 - Scramjet service worker interception with bypass list for internal app assets
 - `/health` and `/reset` routes
 
@@ -38,13 +38,13 @@ Open: `http://localhost:9876`
 
 Health check: `http://localhost:9876/health`
 
-Reset proxy storage: `http://localhost:9876/reset`
+Reset site storage: `http://localhost:9876/reset`
 
 ## Docker (Coolify-friendly, Dockerfile only)
 
 ```bash
-docker build -t scramjet-proxy .
-docker run -e PORT=9876 -p 9876:9876 scramjet-proxy
+docker build -t scramjet-gateway .
+docker run -e PORT=9876 -p 9876:9876 scramjet-gateway
 ```
 
 ## Routes

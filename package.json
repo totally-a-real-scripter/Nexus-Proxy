@@ -1,7 +1,7 @@
 {
-  "name": "nexus-proxy",
+  "name": "nexus-gateway",
   "version": "1.0.0",
-  "description": "Legal, educational Scramjet + Wisp proxy with minimalist browser-style UI",
+  "description": "Legal, educational Scramjet + Wisp gateway with minimalist browser-style UI",
   "type": "module",
   "private": true,
   "scripts": {
