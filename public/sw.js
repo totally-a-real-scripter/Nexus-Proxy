@@ -1,12 +1,13 @@
-const ASSET_VERSION = "scramjet-14";
+const APP_VERSION = "app-2026-05-01-scramjet-1.1.0";
 
-importScripts(`/scram/scramjet.all.js?v=${ASSET_VERSION}`);
+importScripts(`/scram/scramjet.all.js?v=${APP_VERSION}`);
 
 const { ScramjetServiceWorker } = $scramjetLoadWorker();
 const scramjet = new ScramjetServiceWorker();
 
 const bypassExact = new Set([
   "/",
+  "/index.html",
   "/reset",
   "/debug-ui",
   "/health",
@@ -19,6 +20,13 @@ const bypassExact = new Set([
 ]);
 
 const bypassPrefixes = ["/scram/", "/baremux/", "/epoxy/", "/wisp/", "/assets/"];
+const shouldBypass = (requestUrl) => {
+  const url = new URL(requestUrl);
+  return (
+    url.origin === location.origin &&
+    (bypassExact.has(url.pathname) || bypassPrefixes.some((prefix) => url.pathname.startsWith(prefix)))
+  );
+};
 
 let configReady = null;
 
@@ -40,12 +48,7 @@ self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim(
 self.addEventListener("fetch", (event) => {
   event.respondWith(
     (async () => {
-      const url = new URL(event.request.url);
-
-      if (
-        url.origin === location.origin &&
-        (bypassExact.has(url.pathname) || bypassPrefixes.some((prefix) => url.pathname.startsWith(prefix)))
-      ) {
+      if (shouldBypass(event.request.url)) {
         return fetch(event.request);
       }
 

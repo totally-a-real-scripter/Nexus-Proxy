@@ -5,7 +5,7 @@ import { hostname } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { baremuxPath } from "@mercuryworkshop/bare-mux/node";
 import { scramjetPath } from "@mercuryworkshop/scramjet/path";
 import { server as wisp } from "@mercuryworkshop/wisp-js/server";
@@ -14,6 +14,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const require = createRequire(import.meta.url);
 const epoxyPath = dirname(require.resolve("@mercuryworkshop/epoxy-transport"));
+const readPackageVersion = (moduleName) => {
+  const entryPath = require.resolve(moduleName);
+  const packageJsonPath = join(entryPath.split(`${moduleName}`)[0], moduleName, "package.json");
+  return JSON.parse(readFileSync(packageJsonPath, "utf8")).version;
+};
+const scramjetPackageVersion = readPackageVersion("@mercuryworkshop/scramjet");
+const baremuxPackageVersion = readPackageVersion("@mercuryworkshop/bare-mux");
+const epoxyPackageVersion = readPackageVersion("@mercuryworkshop/epoxy-transport");
+const wispPackageVersion = readPackageVersion("@mercuryworkshop/wisp-js");
 
 const HOST = "0.0.0.0";
 const PORT = Number.parseInt(process.env.PORT || "9876", 10) || 9876;
@@ -64,6 +73,11 @@ app.get("/health", (_req, res) => {
   res.json({ status: "alive" });
 });
 
+app.get("/favicon.ico", (_req, res) => {
+  setNoStoreHeaders(res);
+  res.status(204).end();
+});
+
 app.get("/client.js", (_req, res) => {
   setNoStoreHeaders(res);
   res.sendFile(join(__dirname, "public", "client.js"));
@@ -92,7 +106,7 @@ app.get("/debug-ui", (_req, res) => {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Nexus Gateway UI Debug</title>
-    <link rel="stylesheet" href="/style.css?v=scramjet-14" />
+    <link rel="stylesheet" href="/style.css?v=app-2026-05-01-scramjet-1.1.0" />
   </head>
   <body>
     <div id="spotlightShell" class="spotlight-shell is-open">
@@ -319,9 +333,16 @@ server.listen(PORT, HOST, () => {
   console.log(`Host        : ${HOST}`);
   console.log(`Port        : ${PORT}`);
   console.log(`Scramjet    : ${SCRAMJET_ROUTE}`);
-  console.log(`BareMux     : /baremux/ (exists=${existsSync(baremuxPath)}) path=${baremuxPath}`);
-  console.log(`Epoxy       : /epoxy/ (exists=${existsSync(epoxyPath)}) path=${epoxyPath}`);
-  console.log(`Scram Path  : exists=${existsSync(scramjetPath)} path=${scramjetPath}`);
+  console.log("[runtime] scramjet package version:", scramjetPackageVersion);
+  console.log("[runtime] baremux package version:", baremuxPackageVersion);
+  console.log("[runtime] epoxy package version:", epoxyPackageVersion);
+  console.log("[runtime] wisp package version:", wispPackageVersion);
+  console.log("[runtime] scramjet path:", scramjetPath);
+  console.log("[runtime] baremux path:", baremuxPath);
+  console.log("[runtime] epoxy path:", epoxyPath);
+  console.log(`BareMux     : /baremux/ (exists=${existsSync(baremuxPath)})`);
+  console.log(`Epoxy       : /epoxy/ (exists=${existsSync(epoxyPath)})`);
+  console.log(`Scram Path  : exists=${existsSync(scramjetPath)}`);
   console.log(`Wisp WS     : ${WISP_ENDPOINT}`);
   console.log(`Wisp Upgrade: enabled=true`);
   console.log(`Local URL   : http://localhost:${PORT}`);

@@ -1,5 +1,5 @@
 const WISP_PATH = "/wisp/";
-const ASSET_VERSION = "scramjet-14";
+const APP_VERSION = "app-2026-05-01-scramjet-1.1.0";
 
 const SCRAMJET_DB_NAMES = ["$scramjet", "scramjet", "bare-mux", "baremux", "epoxy", "proxy-transports"];
 const SCRAMJET_STORAGE_KEYS = ["scramjet", "$scramjet", "bare-mux-path", "baremux"];
@@ -151,11 +151,11 @@ async function ensureTransport() {
       throw new Error("BareMux runtime missing.");
     }
 
-    const conn = new window.BareMux.BareMuxConnection(`/baremux/worker.js?v=${ASSET_VERSION}`);
+    const conn = new window.BareMux.BareMuxConnection(`/baremux/worker.js?v=${APP_VERSION}`);
     const wispUrl =
       (window.location.protocol === "https:" ? "wss://" : "ws://") + window.location.host + WISP_PATH;
 
-    await conn.setTransport(`/epoxy/index.mjs?v=${ASSET_VERSION}`, [{ wisp: wispUrl }]);
+    await conn.setTransport(`/epoxy/index.mjs?v=${APP_VERSION}`, [{ wisp: wispUrl }]);
   })();
 
   return transportReadyPromise;
@@ -169,7 +169,7 @@ async function ensureServiceWorker() {
       throw new Error("Service workers are not supported.");
     }
 
-    const registration = await navigator.serviceWorker.register(`/sw.js?v=${ASSET_VERSION}`, {
+    const registration = await navigator.serviceWorker.register(`/sw.js?v=${APP_VERSION}`, {
       scope: "/",
       updateViaCache: "none"
     });
@@ -193,9 +193,9 @@ async function getScramjet() {
     const { ScramjetController } = window.$scramjetLoadController();
     const scramjet = new ScramjetController({
       files: {
-        wasm: `/scram/scramjet.wasm.wasm?v=${ASSET_VERSION}`,
-        all: `/scram/scramjet.all.js?v=${ASSET_VERSION}`,
-        sync: `/scram/scramjet.sync.js?v=${ASSET_VERSION}`
+        wasm: `/scram/scramjet.wasm.wasm?v=${APP_VERSION}`,
+        all: `/scram/scramjet.all.js?v=${APP_VERSION}`,
+        sync: `/scram/scramjet.sync.js?v=${APP_VERSION}`
       }
     });
 
@@ -211,9 +211,9 @@ async function configureScramjet(scramjet) {
   const currentConfig = {
     prefix: "/scramjet/",
     files: {
-      wasm: `/scram/scramjet.wasm.wasm?v=${ASSET_VERSION}`,
-      all: `/scram/scramjet.all.js?v=${ASSET_VERSION}`,
-      sync: `/scram/scramjet.sync.js?v=${ASSET_VERSION}`
+      wasm: `/scram/scramjet.wasm.wasm?v=${APP_VERSION}`,
+      all: `/scram/scramjet.all.js?v=${APP_VERSION}`,
+      sync: `/scram/scramjet.sync.js?v=${APP_VERSION}`
     }
   };
 
@@ -388,7 +388,7 @@ function bindUIEvents() {
   });
 
   resetStorageBtn?.addEventListener("click", async () => {
-    window.location.href = `/reset?from=client&v=${ASSET_VERSION}`;
+    window.location.href = `/reset?from=client&v=${APP_VERSION}`;
   });
 }
 
