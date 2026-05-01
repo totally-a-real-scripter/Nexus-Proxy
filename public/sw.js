@@ -1,78 +1,37 @@
-const ASSET_VERSION = "scramjet-13";
-const DEV = self.location.hostname === "localhost" || self.location.hostname === "127.0.0.1";
+const ASSET_VERSION = "scramjet-14";
 
 importScripts(`/scram/scramjet.all.js?v=${ASSET_VERSION}`);
 
 const { ScramjetServiceWorker } = $scramjetLoadWorker();
 const scramjet = new ScramjetServiceWorker();
 
-const bypassSameOrigin = new Set([
+const bypassExact = new Set([
   "/",
   "/reset",
-  "/health",
   "/debug-ui",
+  "/health",
+  "/home.html",
   "/client.js",
   "/style.css",
-  "/home.html",
   "/favicon.ico",
   "/sw.js",
   "/robots.txt"
 ]);
 
 const bypassPrefixes = ["/scram/", "/baremux/", "/epoxy/", "/wisp/", "/assets/"];
-let configReadyPromise;
 
-function devLog(...args) {
-  if (DEV) console.info(...args);
-}
+let configReady = null;
 
-function ensureConfig() {
-  if (!configReadyPromise) {
-    configReadyPromise = scramjet.loadConfig().catch((error) => {
-      configReadyPromise = undefined;
+async function ensureScramjetConfig() {
+  if (!configReady) {
+    configReady = scramjet.loadConfig().catch((error) => {
+      configReady = null;
+      console.error("[sw] Scramjet loadConfig failed:", error);
       throw error;
     });
   }
-  return configReadyPromise;
-}
 
-function shouldBypass(url) {
-  if (url.origin !== self.location.origin) return false;
-  return bypassSameOrigin.has(url.pathname) || bypassPrefixes.some((prefix) => url.pathname.startsWith(prefix));
-}
-
-function storageErrorResponse() {
-  return new Response(
-    "<!doctype html><title>Gateway Error</title><h1>Storage error</h1><p>Scramjet storage is stale or corrupted. Open <a href='/reset' target='_top'>Reset site storage</a> and reload.</p>",
-    {
-      status: 500,
-      headers: {
-        "Content-Type": "text/html; charset=utf-8",
-        "Cache-Control": "no-store"
-      }
-    }
-  );
-}
-
-async function normalizeDocumentResponse(event, response) {
-  const destination = event.request.destination || "";
-  const contentType = response.headers.get("content-type") || "";
-
-  if ((destination === "document" || destination === "iframe") && (!contentType || contentType.includes("text/plain"))) {
-    const body = await response.clone().text();
-    if (/^\s*<!doctype html|^\s*<html/i.test(body)) {
-      const headers = new Headers(response.headers);
-      headers.set("content-type", "text/html; charset=utf-8");
-      headers.delete("content-disposition");
-      return new Response(body, {
-        status: response.status,
-        statusText: response.statusText,
-        headers
-      });
-    }
-  }
-
-  return response;
+  return configReady;
 }
 
 self.addEventListener("install", () => self.skipWaiting());
@@ -83,40 +42,44 @@ self.addEventListener("fetch", (event) => {
     (async () => {
       const url = new URL(event.request.url);
 
-      if (shouldBypass(url)) {
+      if (
+        url.origin === location.origin &&
+        (bypassExact.has(url.pathname) || bypassPrefixes.some((prefix) => url.pathname.startsWith(prefix)))
+      ) {
         return fetch(event.request);
       }
 
       try {
-        await ensureConfig();
+        await ensureScramjetConfig();
 
         if (scramjet.route(event)) {
-          const response = await scramjet.fetch(event);
-          return normalizeDocumentResponse(event, response);
+          return await scramjet.fetch(event);
         }
 
         return fetch(event.request);
       } catch (error) {
-        devLog("[sw] fetch fallback", error?.message || error);
+        console.error("[sw] fetch failed:", {
+          message: error.message,
+          stack: error.stack,
+          url: event.request.url,
+          destination: event.request.destination || ""
+        });
 
-        if (event.request.mode === "navigate") {
-          return storageErrorResponse();
+        if (event.request.mode === "navigate" || event.request.destination === "iframe") {
+          return new Response(
+            "<!doctype html><html><head><meta charset=\"utf-8\"><title>Storage error</title></head><body style=\"font-family:system-ui;background:#05070d;color:white;padding:32px\"><h1>Storage error</h1><p>Site storage is stale or corrupted.</p><p><a href=\"/reset\" target=\"_top\" style=\"color:#9cf\">Reset site storage</a> and reload.</p></body></html>",
+            {
+              status: 500,
+              headers: {
+                "Content-Type": "text/html; charset=utf-8",
+                "Cache-Control": "no-store"
+              }
+            }
+          );
         }
 
-        try {
-          return await fetch(event.request);
-        } catch {
-          return new Response("", { status: 502, statusText: "Bad Gateway" });
-        }
+        return fetch(event.request);
       }
-    })().catch(async (error) => {
-      devLog("[sw] outer fetch guard", error?.message || error);
-      if (event.request.mode === "navigate") return storageErrorResponse();
-      try {
-        return await fetch(event.request);
-      } catch {
-        return new Response("", { status: 500, statusText: "Fetch Failure" });
-      }
-    })
+    })()
   );
 });
