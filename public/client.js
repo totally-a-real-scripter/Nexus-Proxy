@@ -1,13 +1,13 @@
 const WISP_PATH = "/wisp/";
-const ASSET_VERSION = "scramjet-13";
+const ASSET_VERSION = "scramjet-14";
 
-const SCRAMJET_DB_NAMES = ["$scramjet", "scramjet", "bare-mux", "baremux", "epoxy", "gateway-transports"];
+const SCRAMJET_DB_NAMES = ["$scramjet", "scramjet", "bare-mux", "baremux", "epoxy", "proxy-transports"];
 const SCRAMJET_STORAGE_KEYS = ["scramjet", "$scramjet", "bare-mux-path", "baremux"];
 
 const spotlightShell = document.getElementById("spotlightShell");
 const searchForm = document.getElementById("searchForm");
 const urlInput = document.getElementById("urlInput");
-const contentFrame = document.getElementById("contentFrame");
+const proxyFrame = document.getElementById("proxyFrame");
 const clearInput = document.getElementById("clearInput");
 const bottomBar = document.getElementById("bottomBar");
 const homeButton = document.getElementById("homeButton");
@@ -20,7 +20,7 @@ const requiredElements = {
   spotlightShell,
   searchForm,
   urlInput,
-  contentFrame,
+  proxyFrame,
   clearInput,
   bottomBar,
   homeButton,
@@ -35,7 +35,7 @@ for (const [name, element] of Object.entries(requiredElements)) {
 
 let collapseTimer = null;
 let hasBoundEvents = false;
-let gatewayReadyPromise = null;
+let proxyReadyPromise = null;
 let serviceWorkerReadyPromise = null;
 let transportReadyPromise = null;
 let scramjetReadyPromise = null;
@@ -139,7 +139,7 @@ function resetInitState() {
   serviceWorkerReadyPromise = null;
   transportReadyPromise = null;
   scramjetReadyPromise = null;
-  gatewayReadyPromise = null;
+  proxyReadyPromise = null;
   window.__scramjetInstance = undefined;
 }
 
@@ -207,15 +207,35 @@ async function getScramjet() {
   return scramjetReadyPromise;
 }
 
+async function configureScramjet(scramjet) {
+  const currentConfig = {
+    prefix: "/scramjet/",
+    files: {
+      wasm: `/scram/scramjet.wasm.wasm?v=${ASSET_VERSION}`,
+      all: `/scram/scramjet.all.js?v=${ASSET_VERSION}`,
+      sync: `/scram/scramjet.sync.js?v=${ASSET_VERSION}`
+    }
+  };
+
+  if (typeof scramjet.setConfig === "function") {
+    await scramjet.setConfig(currentConfig);
+  }
+
+  if (typeof scramjet.saveConfig === "function") {
+    await scramjet.saveConfig();
+  }
+}
+
 async function initScramjet() {
   await ensureTransport();
-  await getScramjet();
+  const scramjet = await getScramjet();
+  await configureScramjet(scramjet);
   await ensureServiceWorker();
 }
 
-async function ensureGatewayReady() {
-  if (!gatewayReadyPromise) {
-    gatewayReadyPromise = initScramjet().catch(async (error) => {
+async function ensureProxyReady() {
+  if (!proxyReadyPromise) {
+    proxyReadyPromise = initScramjet().catch(async (error) => {
       if (hasInitRetried) throw error;
 
       hasInitRetried = true;
@@ -231,13 +251,13 @@ async function ensureGatewayReady() {
     });
   }
 
-  return gatewayReadyPromise;
+  return proxyReadyPromise;
 }
 
 async function createScramjetUrl(target) {
-  await ensureGatewayReady();
+  await ensureProxyReady();
   const scramjet = await getScramjet();
-  const frame = scramjet.createFrame(contentFrame);
+  const frame = scramjet.createFrame(proxyFrame);
   frame.go(target);
   return frame.frame.src;
 }
@@ -245,7 +265,7 @@ async function createScramjetUrl(target) {
 async function navigate(inputValue) {
   const target = normalizeInput(inputValue);
   const framedUrl = await createScramjetUrl(target);
-  contentFrame.src = framedUrl;
+  proxyFrame.src = framedUrl;
   urlInput.value = inputValue.trim();
   syncSpotlightState();
 }
@@ -275,7 +295,7 @@ function bindUIEvents() {
 
   homeButton?.addEventListener("click", () => {
     hasLoadedContent = false;
-    contentFrame.src = "/home.html";
+    proxyFrame.src = "/home.html";
     urlInput.value = "";
     syncSpotlightState();
     expandSpotlight({ focus: true });
@@ -360,7 +380,7 @@ function bindUIEvents() {
     try {
       resetPanel.hidden = true;
       resetInitState();
-      await ensureGatewayReady();
+      await ensureProxyReady();
     } catch (error) {
       console.error(error);
       resetPanel.hidden = false;
@@ -374,7 +394,7 @@ function bindUIEvents() {
 
 function initUI() {
   hasLoadedContent = false;
-  contentFrame.src = "/home.html";
+  proxyFrame.src = "/home.html";
   spotlightShell.classList.remove("is-hidden");
   spotlightShell.classList.add("is-open");
   syncSpotlightState();
@@ -385,9 +405,9 @@ function initUI() {
   });
 }
 
-function initGatewayInBackground() {
-  ensureGatewayReady().catch((error) => {
-    console.error("[gateway] background init failed", error);
+function initProxyInBackground() {
+  ensureProxyReady().catch((error) => {
+    console.error("[proxy] background init failed", error);
     if (resetPanel) resetPanel.hidden = false;
   });
 }
@@ -395,7 +415,7 @@ function initGatewayInBackground() {
 document.addEventListener("DOMContentLoaded", () => {
   try {
     initUI();
-    initGatewayInBackground();
+    initProxyInBackground();
   } catch (error) {
     console.error("[fatal client startup error]", error);
   }

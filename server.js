@@ -33,13 +33,16 @@ const RESET_DB_NAMES = [
   "BareMux",
   "epoxy",
   "Epoxy",
-  "gateway-transports",
-  "gatewayTransport",
-  "gateway-transport"
+  "proxy-transports",
+  "proxyTransport",
+  "proxy-transport",
+  "site-transports",
+  "siteTransport",
+  "site-transport"
 ];
 
 const app = express();
-app.set("trust host", 1);
+app.set("trust proxy", 1);
 app.disable("x-powered-by");
 
 app.use((_, res, next) => {
@@ -51,7 +54,7 @@ app.use((_, res, next) => {
 app.use(compression());
 
 const setNoStoreHeaders = (res) => {
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, must-revalidate");
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
   res.setHeader("Surrogate-Control", "no-store");
@@ -89,7 +92,7 @@ app.get("/debug-ui", (_req, res) => {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Nexus Gateway UI Debug</title>
-    <link rel="stylesheet" href="/style.css?v=scramjet-13" />
+    <link rel="stylesheet" href="/style.css?v=scramjet-14" />
   </head>
   <body>
     <div id="spotlightShell" class="spotlight-shell is-open">
@@ -134,88 +137,104 @@ app.get("/reset", (_req, res) => {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Reset App Storage</title>
-    <style>
-      body { font-family: system-ui, sans-serif; margin: 24px; color: #111; }
-      code { background: #f1f3f5; padding: 2px 6px; border-radius: 6px; }
-    </style>
+    <title>Reset site storage</title>
   </head>
   <body>
-    <h1>Resetting site storage...</h1>
-    <p>Please wait while we clear site storage and service workers.</p>
-    <pre id="status">Starting reset…</pre>
     <script>
-      const status = document.getElementById("status");
-      const deleteDb = (name) => {
-        if (!name || !("indexedDB" in window)) return Promise.resolve(false);
-        return new Promise((resolve) => {
-          const request = indexedDB.deleteDatabase(name);
-          request.onsuccess = () => resolve(true);
-          request.onerror = () => resolve(false);
-          request.onblocked = () => resolve(false);
-        });
-      };
+async function deleteDb(name) {
+  return new Promise((resolve) => {
+    if (!name || !window.indexedDB) return resolve(false);
 
-      async function resetAll() {
-        const logs = [];
-        const dbNames = new Set(${JSON.stringify(RESET_DB_NAMES)});
+    const request = indexedDB.deleteDatabase(name);
 
-        if ("serviceWorker" in navigator) {
-          const registrations = await navigator.serviceWorker.getRegistrations();
-          for (const registration of registrations) {
-            await registration.unregister();
-            logs.push("Unregistered service worker: " + (registration.scope || "unknown"));
-          }
-        }
+    request.onsuccess = () => resolve(true);
+    request.onerror = () => resolve(false);
+    request.onblocked = () => resolve(false);
+  });
+}
 
-        if ("caches" in window) {
-          const cacheNames = await caches.keys();
-          for (const name of cacheNames) {
-            const deleted = await caches.delete(name);
-            logs.push("Deleted cache " + name + ": " + deleted);
-          }
-        }
+async function resetSiteStorage() {
+  const logs = [];
 
-        if ("indexedDB" in window && typeof indexedDB.databases === "function") {
-          try {
-            const databases = await indexedDB.databases();
-            for (const db of databases) {
-              if (db.name && /scram|bare|mux|epoxy|gateway|transport/i.test(db.name)) {
-                dbNames.add(db.name);
-              }
-            }
-          } catch (error) {
-            logs.push("Unable to enumerate databases: " + String(error));
-          }
-        }
-
-        for (const name of dbNames) {
-          const deleted = await deleteDb(name);
-          logs.push("Tried deleting IndexedDB " + name + ": " + deleted);
-        }
-
-        try {
-          localStorage.clear();
-          logs.push("Cleared localStorage");
-        } catch (error) {
-          logs.push("localStorage clear failed: " + String(error));
-        }
-
-        try {
-          sessionStorage.clear();
-          logs.push("Cleared sessionStorage");
-        } catch (error) {
-          logs.push("sessionStorage clear failed: " + String(error));
-        }
-
-        status.textContent = "Storage reset complete\\n\\n" + logs.join("\\n") + "\\n\\nReloading…";
-        await new Promise((resolve) => setTimeout(resolve, 1200));
-        location.replace("/?reset=" + Date.now());
+  try {
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      for (const registration of registrations) {
+        await registration.unregister();
+        logs.push('Unregistered service worker');
       }
+    }
+  } catch (error) {
+    logs.push('Service worker reset failed: ' + error.message);
+  }
 
-      resetAll().catch((error) => {
-        status.textContent = "Reset failed\\n\\n" + String(error && (error.stack || error));
-      });
+  try {
+    if ('caches' in window) {
+      const names = await caches.keys();
+      for (const name of names) {
+        await caches.delete(name);
+        logs.push('Deleted cache: ' + name);
+      }
+    }
+  } catch (error) {
+    logs.push('Cache reset failed: ' + error.message);
+  }
+
+  try {
+    const dbNames = new Set(${JSON.stringify(RESET_DB_NAMES)});
+
+    if (indexedDB.databases) {
+      const dbs = await indexedDB.databases();
+      for (const db of dbs) {
+        if (db.name) {
+          dbNames.add(db.name);
+        }
+      }
+    }
+
+    for (const name of dbNames) {
+      await deleteDb(name);
+      logs.push('Tried deleting DB: ' + name);
+    }
+  } catch (error) {
+    logs.push('IndexedDB reset failed: ' + error.message);
+  }
+
+  try {
+    localStorage.clear();
+    sessionStorage.clear();
+    logs.push('Cleared localStorage and sessionStorage');
+  } catch (error) {
+    logs.push('Web storage reset failed: ' + error.message);
+  }
+
+  document.body.innerHTML =
+    '<main style="font:16px system-ui;background:#05070d;color:white;min-height:100vh;display:grid;place-items:center;padding:24px">' +
+    '<section style="max-width:720px;width:100%;border:1px solid rgba(255,255,255,.18);border-radius:24px;background:rgba(255,255,255,.08);padding:24px">' +
+    '<h1>Site storage reset complete</h1>' +
+    '<p>Reloading...</p>' +
+    '<pre style="white-space:pre-wrap;color:rgba(255,255,255,.72)">' +
+    logs.join("\n") +
+    '</pre>' +
+    '</section>' +
+    '</main>';
+
+  setTimeout(() => {
+    location.replace('/?reset=' + Date.now());
+  }, 1400);
+}
+
+resetSiteStorage().catch((error) => {
+  document.body.innerHTML =
+    '<main style="font:16px system-ui;background:#05070d;color:white;min-height:100vh;display:grid;place-items:center;padding:24px">' +
+    '<section style="max-width:720px;width:100%;border:1px solid rgba(255,255,255,.18);border-radius:24px;background:rgba(255,255,255,.08);padding:24px">' +
+    '<h1>Reset failed</h1>' +
+    '<pre style="white-space:pre-wrap">' +
+    String(error.stack || error) +
+    '</pre>' +
+    '</section>' +
+    '</main>';
+});
     </script>
   </body>
 </html>`);
